@@ -265,6 +265,8 @@ table.cargo td.n{text-align:right}
 .tl-card .soon{font-size:12.5px;color:var(--magenta);font-weight:700}
 .riverpick{display:flex;flex-direction:column;gap:3px;grid-column:1/-1}
 .riverpick select{font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
+.item small.oncontract{color:var(--magenta);font-weight:700}
+.item .kline{display:block;margin-top:5px;max-width:260px}
 .bids{list-style:none;margin:0;padding:0}
 .bids li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:15px}
 .bids li span{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -4883,6 +4885,29 @@ function contractsHTML() {
     : '<p class="fine">No contracts just now. Customers write with offers each spring, and now and then during the season.</p>'}
   <p class="fine">A contract pays a fixed price above the market for so many loads a season. Fall short and you pay a penalty on each missing load. You can hold ${contractCap()} at once.${rec}</p>`;
 }
+// The contracts a boat works: a towing tug whose route takes in both ends of the run, a fish tug that lands her catch at
+// the contract's port. Contracts aren't given to one boat: any of the company's boats on the run counts toward it.
+const servesK = (t, k) => k.c === 'fish' ? isFish(t) && t.home === k.to : !isFish(t) && !isWarp(t) && t.route.includes(k.from) && t.route.includes(k.to);
+function boatContracts(t) {
+  const ks = t.owner === 'p' ? activeContracts() : rivalContracts(t.co);
+  return ks.filter(k => servesK(t, k));
+}
+// what she has aboard for a contract now
+const aboardFor = (t, k) => k.c === 'fish' ? (isFish(t) && t.home === k.to ? t.fish : 0) : t.tow.filter(g => g.c === k.c && (!k.from || g.from === k.from)).reduce((a, g) => a + g.n, 0);
+function boatContractHTML(t) {
+  if (isWarp(t)) return '';
+  const ks = boatContracts(t), mine = t.owner === 'p';
+  if (!ks.length) {
+    if (!mine) return '';
+    const could = activeContracts().filter(k => (k.c === 'fish') === isFish(t) && needOf(k) > 0);
+    return `<h3>Contract</h3><p class="fine">Not working a contract.${could.length ? ` ${could.length === 1 ? 'One of your contracts wants' : 'Your contracts want'} ${isFish(t) ? 'fish landed elsewhere' : 'a run she isn\'t on'}: open ${could.length === 1 ? 'it' : 'one'} and choose "${isFish(t) ? 'Land here' : 'Put her on it'}".` : ''}</p>`;
+  }
+  return `<h3>${mine ? 'On contract' : `${esc(coName(t.co))}'s contract`}${ks.length > 1 ? ` <span class="count">${ks.length}</span>` : ''}</h3>
+  <ul class="list">${ks.map(k => { const on = aboardFor(t, k), need = needOf(k);
+    return `<li><button class="item" ${mine ? `data-act="select" data-t="contract" data-id="${k.id}"` : 'disabled'}>${contractGlyph(k)}<span><b>${esc(ucf(qtyText(k)))}</b><small>${esc(runText(k))} for ${esc(k.cust)} · ${fmtPx(k.rate)} a ${unit(k)}</small><small>${need > 0 ? `${Math.ceil(need)} still wanted ${dueText(k)}` : 'Filled for this season'}${on >= .5 ? ` · ${k.c === 'fish' ? `${on.toFixed(1)} tons` : `${Math.round(on)} load${Math.round(on) === 1 ? '' : 's'}`} aboard for it` : ''}</small><span class="kline">${kBar(k)}</span></span></button></li>`; }).join('')}</ul>
+  ${mine && ks.length && boatsOnK(ks[0]) > 1 ? `<p class="fine">${boatsOnK(ks[0]) - 1} more of your boats ${boatsOnK(ks[0]) === 2 ? 'works' : 'work'} this run too; whatever any of them delivers counts.</p>` : ''}`;
+}
+const boatsOnK = k => S.tugs.filter(t => t.owner === 'p' && servesK(t, k)).length;
 function contractHTML(id) {
   const k = contracts().find(k => k.id === id); if (!k) return null;
   const offer = k.state === 'offer', fish = k.c === 'fish', mkt = kMarket(k);
@@ -4994,7 +5019,7 @@ function companyHTML() {
   <div class="row"><button class="btn primary wide" data-act="shipyard">Buy a boat</button><button class="btn wide" data-act="bank">Bank</button></div>
   <div class="row"><button class="btn wide" data-act="select" data-t="exch">Stock exchange · ${fmtPx(sharePrice('me'))} a share${S.mkt.me.mine < SHARES ? `, you hold ${pctOf(S.mkt.me.mine)}` : ''}</button></div>
   <h3>Your fleet <span class="count">${mine.length}</span></h3>
-  ${mine.length ? `<ul class="list">${mine.map(t => `<li><button class="item" data-act="select" data-t="tug" data-id="${t.id}">${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${esc(statusOf(t))}</small></span><span class="side">${money(t.earn)}</span></button></li>`).join('')}</ul>` : '<p class="fine">You have no boats. Order one from the yards at Collingwood or Owen Sound.</p>'}
+  ${mine.length ? `<ul class="list">${mine.map(t => { const ks = boatContracts(t); return `<li><button class="item" data-act="select" data-t="tug" data-id="${t.id}">${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${esc(statusOf(t))}</small>${ks.length ? `<small class="oncontract">On contract: ${esc(ks.map(k => `${qtyText(k)}, ${runText(k)}`).join('; '))}</small>` : ''}</span><span class="side">${money(t.earn)}</span></button></li>`; }).join('')}</ul>` : '<p class="fine">You have no boats. Order one from the yards at Collingwood or Owen Sound.</p>'}
   ${fleetLayupHTML(mine)}
   <h3>Tow wanted <span class="count">${jobs.length}</span></h3>
   ${jobs.length ? `<ul class="list">${jobs.map(j => `<li><button class="item" data-act="select" data-t="job" data-id="${j.id}">${jobGlyph(j)}<span><b>${j.kind === 'salvage' ? 'Salvage' : 'Schooner'} ${esc(j.name)}</b><small>${esc(j.where)}, to ${PORT[j.dest].name}. ${daysLeft(j)} left.</small></span><span class="side">${money(j.reward)}</span></button></li>`).join('')}</ul>` : '<p class="fine">No ships are asking for a tow right now. Wind-bound schooners and wrecks show up on the map with a pulsing ring.</p>'}
@@ -5359,6 +5384,7 @@ function tugHTML(t) {
     ${planThumb('boat', t.model, 'the ' + t.name)}
     <p class="fine">${m.name}, built ${yearOf(t.bought)}. ${work}</p>
     <dl class="kv">${earnedHTML(t)}</dl>
+    ${boatContractHTML(t)}
     <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details>
     <button class="btn ghost" data-act="select" data-t="co" data-id="${t.co}">About ${esc(coName(t.co))}</button>`;
   }
@@ -5386,6 +5412,7 @@ function tugHTML(t) {
   ${planThumb('boat', t.model, 'the ' + t.name)}
   <dl class="kv"><dt>Hull</dt><dd>${hullBar(t.hull)}</dd>${earnedHTML(t)}<dt>Built</dt><dd>${yearOf(t.bought)}${ageOf(t) >= 1 ? `, ${Math.floor(ageOf(t))} years old` : ''}</dd><dt>Running cost</dt><dd>${t.state === 'laid' && S.season ? `${money(runCost(t) * LAID_COST)} a day, laid up` : `${money(runCost(t))} a day`}</dd><dt>Speed</dt><dd>${m.kn} knots${m.raftKn ? `, ${m.raftKn} with a raft` : m.sail ? ' in a breeze' : ''}</dd></dl>
   ${ageOf(t) >= 25 ? '<p class="fine">She is getting old: she burns more coal and suffers more in a gale every year. Think about replacing her.</p>' : ''}
+  ${boatContractHTML(t)}
   <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details>
   ${towing}
   <h3>Captain's orders</h3>
