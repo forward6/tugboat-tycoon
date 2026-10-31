@@ -3903,6 +3903,8 @@ function draw(now) {
     polyline(getPath('p:' + selTug.home, 'g:' + selTug.ground).pts); ctx.setLineDash([]);
   }
   if (selTug && selTug.path) { ctx.strokeStyle = COL.magenta; ctx.lineWidth = 1.4; polyline([[selTug.x, selTug.y], ...selTug.path.slice(selTug.pi)]); }
+  const hovTug = hoveredTug(selTug, editing);
+  if (hovTug) drawHoverRoute(hovTug);
   // ports
   for (const p of PORTS) {
     if (!portOpen(p.id)) continue;
@@ -3955,6 +3957,7 @@ function draw(now) {
     drawTug(t, sx, sy, zr, now);
   }
   drawGulls(zr, now);
+  if (hovTug) drawHoverMarks(hovTug, zr);
   // labels for selected tug
   if (selTug) { const [sx, sy] = w2s(selTug.x, selTug.y); ctx.beginPath(); ctx.arc(sx, sy, 6 + 9 * tugF(zr), 0, Math.PI * 2); ctx.strokeStyle = COL.magenta; ctx.lineWidth = 2.5; ctx.stroke(); if (!selTug.at) { ctx.font = `bold 13px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; halo(selTug.name, sx, sy - 17, COL.magenta); } }
   // money floaters
@@ -3966,6 +3969,31 @@ function draw(now) {
   drawOffscreen();
   drawWeather(now);
   drawScaleBar();
+}
+// With a mouse, the boat under the pointer in a list or on the map shows her route: her stops in order, numbered, for a
+// towing tug; her grounds and fish house for a fish tug; the run down her river for an alligator
+function hoveredTug(selTug, editing) {
+  if (ui.modalOpen || editing || HB) return null;
+  const id = ui.hoverTug || ui.mapHoverTug, t = id && S.tugs.find(t => t.id === id);
+  return t && t !== selTug ? t : null;
+}
+const hoverCol = t => t.owner === 'p' ? COL.magenta : (RIVAL[t.co] && RIVAL[t.co].color) || COL.rival;
+function drawHoverRoute(t) {
+  const col = hoverCol(t);
+  ctx.strokeStyle = rgba(col, .8); ctx.lineWidth = 2.6; ctx.setLineDash([8, 6]);
+  if (isWarp(t)) polyline([[t.x, t.y], nodePos('p:' + (t.river || t.at))]);
+  else if (isFish(t)) { if (t.ground && t.home) polyline(getPath('p:' + t.home, 'g:' + t.ground).pts); }
+  else if (t.route.length >= 2) for (let i = 0; i < t.route.length; i++) polyline(getPath('p:' + t.route[i], 'p:' + t.route[(i + 1) % t.route.length]).pts);
+  ctx.setLineDash([]);
+  if (t.path) { ctx.strokeStyle = rgba(col, .9); ctx.lineWidth = 1.4; polyline([[t.x, t.y], ...t.path.slice(t.pi)]); }
+}
+function drawHoverMarks(t, zr) {
+  const col = hoverCol(t), [bx, by] = w2s(t.x, t.y);
+  ctx.beginPath(); ctx.arc(bx, by, 6 + 9 * tugF(zr), 0, Math.PI * 2); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+  const stops = isFish(t) || isWarp(t) ? [] : t.route.length >= 2 ? t.route : [];
+  ctx.font = `bold 12px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  stops.forEach((pid, i) => { const [sx, sy] = w2s(...nodePos('p:' + pid)); ctx.beginPath(); ctx.arc(sx + 12, sy - 12, 9, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.fillStyle = COL.surface; ctx.fillText(String(i + 1), sx + 12, sy - 11.5); });
+  ctx.font = `bold 13px ${FONT_UI}`; ctx.textBaseline = 'bottom'; halo(t.name, bx, by - 8 - 9 * tugF(zr), col);
 }
 // "Harbour view" tags under the railway ports once you're in close
 let harbourChips = [], portLabels = [];
@@ -4708,7 +4736,8 @@ function showPicker(hits, x, y) {
   }
 }
 function hidePicker() { const el = $('#picker'); if (el && !el.hidden) el.hidden = true; }
-function hover(x, y) { const h = hitTest(x, y); canvas.classList.toggle('pointing', !!h); }
+function hover(x, y) { const h = hitTest(x, y); canvas.classList.toggle('pointing', !!h); ui.mapHoverTug = h && h.t === 'tug' ? h.id : null; }
+canvas.addEventListener('pointerleave', () => { ui.mapHoverTug = null; });
 function tap(x, y) {
   const h = hitTest(x, y);
   const m = ui.mode;
@@ -4745,7 +4774,7 @@ function tap(x, y) {
    The inspector panel
    ===================================================================== */
 const ui = { sel: null, mode: null, panelDirty: true, tickerDirty: true, lastPanel: '', speed: 1, modalOpen: false, queue: [], hold: false, confirmSell: null, confirmLayup: false, confirmNew: false, yard: 'collingwood', buyName: null, sheetOpen: true };
-function select(s) { ui.sel = s; ui.confirmSell = null; ui.confirmLayup = false; ui.panelDirty = true; if (s && window.innerWidth < 900) $('#panel').classList.remove('collapsed'); }
+function select(s) { ui.sel = s; ui.confirmSell = null; ui.confirmLayup = false; ui.hoverTug = null; ui.panelDirty = true; if (s && window.innerWidth < 900) $('#panel').classList.remove('collapsed'); }
 const panelEl = $('#panelInner');
 panelEl.addEventListener('toggle', e => { if (e.target.hasAttribute && e.target.hasAttribute('data-sheet')) ui.sheetOpen = e.target.open; }, true);
 function renderPanel() {
@@ -6431,6 +6460,8 @@ document.addEventListener('click', onAct);
 $('#ticker').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ACTS.newsAll(); } });
 $('#panel').addEventListener('pointerdown', e => { ui.hold = true; hxTouch(e); });
 $('#panel').addEventListener('pointermove', hxTouch);
+$('#panel').addEventListener('pointerover', e => { if (e.pointerType && e.pointerType !== 'mouse') return; const el = e.target.closest && e.target.closest('[data-t="tug"][data-id]'); ui.hoverTug = el ? el.dataset.id : null; });
+$('#panel').addEventListener('pointerleave', () => { ui.hoverTug = null; });
 const release = () => setTimeout(() => { ui.hold = false; }, 350);
 window.addEventListener('pointerup', release); window.addEventListener('pointercancel', release);
 document.addEventListener('pointerdown', e => { if (!e.target.closest('#picker')) hidePicker(); }, true);
