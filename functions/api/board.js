@@ -16,6 +16,10 @@ export async function onRequestPost({ request, env }) {
   let r; try { r = await request.json(); } catch (e) { return json({ error: 'bad request' }, 400); }
   const id = clip(r.id, 40); if (!/^[a-z0-9]{8,40}$/.test(id)) return json({ error: 'bad id' }, 400);
   const board = (await env.PLAYS.get('board', 'json')) || {};
+  if (r.remove) { // a game can take itself off the board: only it knows its id
+    if (board[id]) { delete board[id]; await env.PLAYS.put('board', JSON.stringify(board)); }
+    return json({ ok: true, removed: true });
+  }
   if (!board[id] && Object.keys(board).length >= 200) return json({ error: 'board full' }, 429);
   const now = Date.now(), p = board[id] || { id, first: now, minutes: 0, sessions: 0 };
   Object.assign(p, {
