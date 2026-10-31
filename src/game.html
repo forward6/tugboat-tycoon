@@ -5441,7 +5441,7 @@ function titleHTML(saved) {
   <p class="fine">Pinch, scroll or double-tap to zoom in, drag to move around, and tap anything on the map. The corner button brings back the whole bay. The years roll on for as long as you like to play.</p>
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="newGameYes">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
   ${playNotice()}${homeHint()}
-  ${BOARD.on ? `${BOARD.name ? '' : boardNameHTML('title')}<div class="row"><button class="btn wide ghost" data-act="board">Family scoreboard</button></div>` : ''}`;
+  ${BOARD.on ? `${BOARD.named ? '' : boardNameHTML('title')}<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button></div>` : ''}`;
 }
 // On the standalone copy in an iPad's browser: how to put it on the home screen, where it opens full screen like an app
 const asApp = () => navigator.standalone === true || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
@@ -5533,14 +5533,20 @@ function toggleFull() {
   try { Promise.resolve(f.call(e)).catch(() => toast('This browser won’t show the game full screen here.', true)); } catch (err) { toast('This browser won’t show the game full screen here.', true); }
 }
 /* =====================================================================
-   The family scoreboard, on the game's own site: each game reports, every few minutes while it is open, who is
-   playing (the name they give), their company, its year, worth, standing and fleet, and how long they have played;
+   The scoreboard, on the game's own site: each game reports, every few minutes while it is open, who is
+   playing (a name of their choosing, or one drawn at random until they choose), their company, its year, worth, standing and fleet, and how long they have played;
    the board (functions/api/board.js, kept in Cloudflare KV) shows everyone, best first, with when they last played.
    ===================================================================== */
-const BOARD = { on: !inClaude && !window.__noBoard, id: '', name: '', mark: 0, started: false };
-try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '' }); } catch (e) { /* storage blocked */ }
-const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name })); } catch (e) { /* storage blocked */ } };
-if (!BOARD.id) { BOARD.id = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => (b % 36).toString(36)).join(''); boardSave(); }
+const BOARD = { on: !inClaude && !window.__noBoard, id: '', name: '', named: false, mark: 0, started: false };
+try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '', named: !!v.named }); } catch (e) { /* storage blocked */ }
+const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name, named: BOARD.named })); } catch (e) { /* storage blocked */ } };
+// a name for the board until the player picks one: a first name and a surname of the bay's settlers
+const BOARD_FIRST = ['Ada', 'Agnes', 'Albert', 'Alice', 'Angus', 'Annie', 'Archie', 'Bella', 'Clara', 'Duncan', 'Edith', 'Elsie', 'Ewan', 'Flora', 'George', 'Grace', 'Hamish', 'Harriet', 'Hugh', 'Isabel', 'Jean', 'Kate', 'Lachlan', 'Lottie', 'Malcolm', 'Neil', 'Nell', 'Owen', 'Peggy', 'Rose', 'Silas', 'Violet', 'Walter'];
+const BOARD_LAST = ['Barr', 'Boyd', 'Cameron', 'Campbell', 'Douglas', 'Fraser', 'Gordon', 'Grant', 'Hamilton', 'Kerr', 'MacKay', 'McLean', 'Morrison', 'Munro', 'Murray', 'Paterson', 'Reid', 'Ross', 'Shaw', 'Sinclair', 'Stewart', 'Wallace'];
+const boardRandomName = () => { const r = crypto.getRandomValues(new Uint16Array(2)); return `${BOARD_FIRST[r[0] % BOARD_FIRST.length]} ${BOARD_LAST[r[1] % BOARD_LAST.length]}`; };
+if (!BOARD.id) BOARD.id = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => (b % 36).toString(36)).join('');
+if (!BOARD.name) BOARD.name = boardRandomName();
+boardSave();
 const deviceName = () => { const u = navigator.userAgent; return /iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'computer'; };
 function boardReport(start, leaving) {
   if (!BOARD.on || !S || navigator.onLine === false) return;
@@ -5560,15 +5566,15 @@ function boardStart() {
 const boardAgo = ms => { const m = ms / 60000; return m < 2 ? 'just now' : m < 60 ? `${Math.round(m)} minutes ago` : m < 120 ? 'an hour ago' : m < 1440 ? `${Math.round(m / 60)} hours ago` : m < 2880 ? 'yesterday' : `${Math.round(m / 1440)} days ago`; };
 const playedText = min => min < 1 ? 'a few minutes' : min < 60 ? `${Math.round(min)} min` : `${Math.floor(min / 60)} h ${Math.round(min % 60)} min`;
 function boardNameHTML(where) {
-  return `<div class="namefield"><label for="playerName" class="fine">${where === 'title' ? 'Your name, for the family scoreboard' : 'Your name on the board'}</label><input id="playerName" maxlength="30" value="${esc(BOARD.name)}" placeholder="Dad, Mom…" autocomplete="off"><button class="btn" data-act="boardName" data-where="${where}">Save</button></div>`;
+  return `<div class="namefield"><label for="playerName" class="fine">Your name on the scoreboard</label><input id="playerName" maxlength="30" value="${esc(BOARD.name)}" autocomplete="off"><button class="btn ghost" data-act="boardNameAnother" aria-label="Pick another name">Another</button><button class="btn" data-act="boardName" data-where="${where}">Save</button></div>`;
 }
 async function openBoard() {
-  showModal(`<h2>Family scoreboard</h2><p class="fine">Fetching the scoreboard…</p>`);
+  showModal(`<h2>Scoreboard</h2><p class="fine">Fetching the scoreboard…</p>`);
   let data = null; try { const r = await fetch('api/board', { cache: 'no-store' }); data = r.ok ? await r.json() : r.status === 503 ? { off: true } : null; } catch (e) { /* offline */ }
   if (ui.modalOpen && $('#modalBody h2') && /scoreboard/i.test($('#modalBody h2').textContent)) showModal(boardHTML(data));
 }
 function boardHTML(data) {
-  const head = `<div class="rules"><span>Tugboat Tycoon</span><span>Who's playing</span></div><h2>Family scoreboard</h2>`, close = '<div class="row"><button class="btn primary wide" data-act="closeModal">Close</button></div>';
+  const head = `<div class="rules"><span>Tugboat Tycoon</span><span>Who's playing</span></div><h2>Scoreboard</h2>`, close = '<div class="row"><button class="btn primary wide" data-act="closeModal">Close</button></div>';
   if (!data) return `${head}<p class="desc">The scoreboard needs a connection. Try again when you're online.</p>${close}`;
   if (data.off) return `${head}<p class="desc">The scoreboard isn't switched on yet.</p>${close}`;
   const ps = (data.players || []).slice().sort((a, b) => (b.worth || 0) - (a.worth || 0));
@@ -5590,7 +5596,7 @@ function menuHTML() {
   <p class="fine">Your game is kept on this device only. To carry on somewhere else, send it (by Mail, Messages, AirDrop or anything that sends a file), then open the game there and load the file.</p>
   ${ui.confirmNew ? `<div class="confirm"><b>Start over in 1870? This game will be lost unless you saved it.</b><div class="row"><button class="btn danger wide" data-act="newGameYes">Start over</button><button class="btn wide" data-act="newGameNo">Keep playing</button></div></div>` : '<button class="btn" data-act="newGame">New game</button>'}
   ${playLog.owner && playLog.db ? '<div class="row"><button class="btn wide" data-act="players">Who\'s been playing</button></div>' : ''}
-  ${BOARD.on ? '<div class="row"><button class="btn wide" data-act="board">Family scoreboard</button></div>' : ''}
+  ${BOARD.on ? '<div class="row"><button class="btn wide" data-act="board">Scoreboard</button></div>' : ''}
   ${soundMenuHTML()}
   ${gfxMenuHTML()}
   <h3>How to play</h3>
@@ -5635,7 +5641,8 @@ const ACTS = {
   pvClose: () => closePlans(),
   players: () => openPlayers(),
   board: () => openBoard(),
-  boardName: el => { const i = $('#playerName'); BOARD.name = (i ? i.value : '').trim().slice(0, 30); boardSave(); toast(BOARD.name ? `Saved. You're ${BOARD.name} on the scoreboard.` : 'Saved.'); if (BOARD.started) boardReport();
+  boardNameAnother: () => { const i = $('#playerName'); if (i) i.value = boardRandomName(); },
+  boardName: el => { const i = $('#playerName'); BOARD.name = (i ? i.value : '').trim().slice(0, 30) || boardRandomName(); BOARD.named = true; boardSave(); toast(BOARD.name ? `Saved. You're ${BOARD.name} on the scoreboard.` : 'Saved.'); if (BOARD.started) boardReport();
     if (el.dataset.where === 'title') showModal(titleHTML(loadSaved())); else openBoard(); },
   pvFit: () => pvFit(),
   pvZoom: el => { const r = pvRect(); pvZoomAt(+el.dataset.v > 0 ? 1.6 : 1 / 1.6, r.width / 2, r.height / 2); },
