@@ -1,0 +1,11 @@
+# built from the sources (tools/build.py, tools/site.py); Cloudflare Pages builds them on every push
+index.html
+site/
+dist/
+release/
+preview/
+# downloaded elevation tiles; tools/relief.py fetches them again if needed
+data/relief_raw/
+__pycache__/
+*.pyc
+.DS_Store
