@@ -4869,12 +4869,12 @@ function tugHTML(t) {
   ${planThumb('boat', t.model, 'the ' + t.name)}
   <dl class="kv"><dt>Hull</dt><dd>${hullBar(t.hull)}</dd><dt>Earned this season</dt><dd class="pos">${money(t.earn)}</dd><dt>Built</dt><dd>${yearOf(t.bought)}${ageOf(t) >= 1 ? `, ${Math.floor(ageOf(t))} years old` : ''}</dd><dt>Running cost</dt><dd>${t.state === 'laid' && S.season ? `${money(runCost(t) * LAID_COST)} a day, laid up` : `${money(runCost(t))} a day`}</dd><dt>Speed</dt><dd>${m.kn} knots${m.raftKn ? `, ${m.raftKn} with a raft` : m.sail ? ' in a breeze' : ''}</dd></dl>
   ${ageOf(t) >= 25 ? '<p class="fine">She is getting old: she burns more coal and suffers more in a gale every year. Think about replacing her.</p>' : ''}
-  ${layupHTML(t)}
   <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details>
   <h3>Captain's orders</h3>
   <div class="seg" role="group" aria-label="Captain's stance"><button data-act="stance" data-v="cautious" aria-pressed="${t.stance === 'cautious'}">Cautious</button><button data-act="stance" data-v="bold" aria-pressed="${t.stance === 'bold'}">Bold</button></div>
   <p class="fine">${t.stance === 'cautious' ? 'Runs for shelter when a gale is forecast and stays in port until it blows over.' + (isFish(t) ? ' Obeys the closed season.' : '') : 'Keeps going whatever the glass says. Faster, but gales wreck tows, damage the hull and can sink her.' + (isFish(t) ? ' Fishes through the closed season.' : '')}</p>
   ${orders}
+  ${layupHTML(t)}
   <div class="row"><button class="btn ghost wide" data-act="renameTug">Rename her</button></div>
   ${sell}`;
 }
