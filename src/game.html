@@ -69,6 +69,7 @@ button:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--magenta);o
 .brand{font-family:var(--font-display);font-size:22px;letter-spacing:.02em;line-height:1;white-space:nowrap}
 .brand small{display:block;font-family:var(--font-ui);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);margin-top:3px}
 .tb-sep{width:1px;align-self:stretch;background:var(--rule)}
+.iconbtn.tb-hist{font-family:var(--font-display);font-size:23px;font-weight:400;line-height:1;padding:0;width:42px;min-width:42px;color:var(--ink)}
 .tb-stat{display:flex;flex-direction:column;line-height:1.15;min-width:0}
 .tb-stat .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
 .tb-stat .val{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -360,6 +361,7 @@ table.cargo td.n{text-align:right}
   #ticker{right:0}
 }
 @media (max-width: 1000px) and (min-width: 621px){ #topbar .brand, #topbar .tb-sep{display:none} }
+@media (max-width: 620px){ #topbar .tb-hist{display:none} }
 @media (max-width: 480px){
   #weather{grid-column:1/-1;grid-row:3}
   .tb-controls{grid-column:1/-1;grid-row:2;justify-content:space-between}
@@ -380,6 +382,7 @@ table.cargo td.n{text-align:right}
 <div id="hud">
   <header id="topbar">
     <div class="brand">Tugboat Tycoon<small>Georgian Bay</small></div>
+    <button class="iconbtn tb-hist" data-act="history" aria-label="The bay through the years: a timeline of its history" title="History">H</button>
     <div class="tb-sep" aria-hidden="true"></div>
     <div class="tb-stat tb-date"><span class="lbl" id="seasonLbl">Navigation open</span><span class="val" id="date">–</span></div>
     <div class="tb-stat tb-grow" id="weather"><span class="val" id="wxNow">–</span><span class="fc" id="wxFc">–</span></div>
@@ -5959,7 +5962,7 @@ function tlRows() {
   const last = [], rows = HISTORY.map(e => { const x = tlX(e.at); let r = 0; while (last[r] != null && x - last[r] < 24) r++; last[r] = x; return r; });
   return { rows, n: last.length };
 }
-function historyHTML() {
+function historyHTML(fromMenu) {
   const end = tlEnd(), W = tlX(end) + TL_PAD, { rows, n } = tlRows(), H = 40 + n * 26 + 40, axis = H - 30, game = tlGame();
   const ticks = []; for (let y = TL0; y <= end; y += 10) ticks.push(`<span class="tl-tick${y % 50 === 0 ? ' big' : ''}" style="left:${tlX(y)}px">${y}</span>`);
   const eras = TL_ERAS.map(([a, b, t, c]) => `<span class="tl-era" style="left:${tlX(a)}px;width:${tlX(b || end) - tlX(a)}px;--c:var(${c})" title="${esc(t)}">${esc(t)}</span>`).join('');
@@ -5973,7 +5976,7 @@ function historyHTML() {
   <div class="tl-legend">${Object.values(TL_KINDS).map(([t, c]) => `<span style="--c:var(${c})"><i></i>${esc(t)}</span>`).join('')}</div>
   <div class="tl-card" id="tlCard" aria-live="polite"></div>
   <div class="row"><button class="btn wide" data-act="tlStep" data-v="-1">‹ Earlier</button><button class="btn wide" data-act="tlStep" data-v="1">Later ›</button></div>
-  <div class="row"><button class="btn wide ghost" data-act="menu">Back to the menu</button><button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
+  <div class="row">${fromMenu ? '<button class="btn wide ghost" data-act="menu">Back to the menu</button>' : ''}<button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
 }
 let tlSel = 0;
 function tlPick(i, scroll) {
@@ -5987,8 +5990,9 @@ function tlPick(i, scroll) {
   const [prev, next] = document.querySelectorAll('#modalBody [data-act="tlStep"]'); if (prev) prev.disabled = tlSel === 0; if (next) next.disabled = tlSel === HISTORY.length - 1;
 }
 // Opens on the last thing that happened before your game's date
-function openHistory() {
-  showModal(historyHTML(), 'wide');
+function openHistory(fromMenu) {
+  if (!S) return;
+  showModal(historyHTML(fromMenu), 'wide');
   const g = tlGame(); let i = 0; HISTORY.forEach((e, j) => { if (e.at <= g) i = j; });
   tlPick(i, 'jump');
   const sc = $('#tlScroll'); if (sc) sc.scrollLeft = Math.max(0, tlX(g) - sc.clientWidth * .4);
@@ -6047,7 +6051,7 @@ const ACTS = {
   gfxLight: el => { const sc = $('#modalBody').scrollTop; GFX.light = el.dataset.v; gfxSave(); showModal(menuHTML()); $('#modalBody').scrollTop = sc; },
   soundSet: el => { setSound(el.dataset.v === '1'); if ($('#modalBody .slider')) showModal(menuHTML()); },
   kAccept: el => { const k = contracts().find(k => k.id === el.dataset.id); if (acceptContract(k)) toast(`Signed with ${k.cust}.`); if (el.dataset.modal) { const h = offersHTML(); if (h) showModal(h); else closeModal(); } ui.panelDirty = true; },
-  history: () => openHistory(),
+  history: el => openHistory(!!el.closest('#modalBody')),
   tlPick: el => tlPick(+el.dataset.i),
   tlStep: el => tlPick(tlSel + +el.dataset.v),
   kBid: el => openTender(contracts().find(k => k.id === el.dataset.id), el.dataset.modal ? 'offers' : null),
