@@ -267,6 +267,7 @@ table.cargo td.n{text-align:right}
 .riverpick select{font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
 .item small.oncontract{color:var(--magenta);font-weight:700}
 .item .kline{display:block;margin-top:5px;max-width:260px}
+.kv dd .ddsub{display:block;font-weight:400;font-size:12.5px;color:var(--ink-2)}
 .kvlink{all:unset;cursor:pointer;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px}
 .kvlink:focus-visible{outline:2px solid var(--magenta);outline-offset:2px}
 .bids{list-style:none;margin:0;padding:0}
@@ -517,6 +518,9 @@ const MODELS = {
                      boiler: 'No boiler: burns fuel oil', len: 52, beam: 14, draft: 5, crew: '4 or 5', aboutDraft: true },
                    blurb: 'An all-steel, fully enclosed fish tug with an oil engine and a powered lifter. Fishes through weather that keeps an open boat in port. After the war, Russel Brothers of Owen Sound built steel fish tugs with Cummins diesels.' },
 };
+// Hands aboard each kind of boat when she's working (from her crew in the specs; a hooker's barges carry three each)
+const CREW = { woodsimple: 4, woodcompound: 11, hooker: 20, woodwrecker: 12, woodrefit: 4, alligator: 5, steelcompound: 9, steelwrecker: 20, diesel: 8,
+  skiff: 3, steamfish: 6, liftertug: 6, gasfish: 4, dieselfish: 5 };
 const OLD_MODELS = { harbour: 'woodsimple', compound: 'woodcompound', steel: 'steelcompound', fish: 'steamfish', lifter: 'liftertug' };
 const forSale = (m, y) => !m.refit && y >= m.year && (!m.to || y <= m.to);
 
@@ -5005,6 +5009,19 @@ function portContractsHTML(pid) {
   return (ks.length ? `<ul class="list">${ks.map(k => `<li><button class="item" data-act="select" data-t="contract" data-id="${k.id}">${contractGlyph(k)}<span><b>Contract: ${esc(qtyText(k))}</b><small>${esc(runText(k))}, ${Math.floor(needOf(k))} still wanted</small></span><span class="side">${kBar(k)}</span></button></li>`).join('')}</ul>` : '')
     + (rk.length ? `<p class="fine">${rk.map(k => `${esc(coName(k.by))} has a contract for ${esc(qtyText(k))} ${esc(k.from ? 'from ' + runText(k) : runText(k))}.`).join(' ')}</p>` : '');
 }
+// The people a company employs: the crews of its working boats, a shipkeeper on each boat laid up (all of them in the
+// winter, when the crews are paid off), and the office and the wharf ashore
+function staffOf(boats) {
+  let afloat = 0, keepers = 0;
+  for (const t of boats) { if (S.season && t.state !== 'laid') afloat += CREW[t.model] || 4; else keepers++; }
+  const ashore = boats.length ? 2 + Math.ceil(boats.length / 3) : 0;
+  return { afloat, keepers, ashore, all: afloat + keepers + ashore };
+}
+function staffHTML(boats) {
+  const st = staffOf(boats); if (!st.all) return '';
+  const parts = [st.afloat && `${st.afloat} on the boats`, st.keepers && `${st.keepers} shipkeeper${st.keepers === 1 ? '' : 's'}`, st.ashore && `${st.ashore} ashore`].filter(Boolean);
+  return `<dt>Employees</dt><dd>${st.all}<small class="ddsub">${parts.join(', ')}</small></dd>`;
+}
 function hullBar(h) { const cls = h > 60 ? '' : h > 30 ? 'warn' : 'bad'; return `<div class="hull"><div class="bar ${cls}"><i style="width:${Math.round(h)}%"></i></div><span>${Math.round(h)}%</span></div>`; }
 function companyHTML() {
   const L = S.ledger, mine = S.tugs.filter(t => t.owner === 'p');
@@ -5016,6 +5033,7 @@ function companyHTML() {
     <dt>Bank loans</dt><dd>${money(S.loans)}</dd>
     <dt>Net worth</dt><dd>${money(netWorth())}</dd>
     <dt>Standing</dt><dd>${titleFor(netWorth())}</dd>
+    ${staffHTML(mine)}
     <dt><button class="kvlink" data-act="season">${S.season ? 'This season so far' : 'Last season'}</button></dt><dd class="${profit < 0 ? 'neg' : 'pos'}"><button class="kvlink" data-act="season" aria-label="See the season boat by boat">${money(profit)} ›</button></dd>
   </dl>
   <div class="row"><button class="btn primary wide" data-act="shipyard">Buy a boat</button><button class="btn wide" data-act="bank">Bank</button></div>
@@ -5061,7 +5079,8 @@ function coHTML(id) {
   return `${head('Competitor', esc(coName(id)))}
   <div class="chips"><span class="chip"><span class="dot" style="background:${c.color}"></span>${esc(c.kind)}</span><span class="chip">${esc(PORT[c.home].name)}</span>${c.since || c.from > 1870 ? `<span class="chip">Since ${c.since || c.from}</span>` : ''}</div>
   <p class="desc">${esc(c.desc)}</p>
-  <dl class="kv">${S.season ? `<dt>Revenue this season</dt><dd>${money(st.earned)}</dd>` : ''}${hist.map(([yr, v]) => `<dt>${yr}</dt><dd>${money(v)}</dd>`).join('')}</dl>
+  <dl class="kv">${coActive(c, y) ? staffHTML(fleet) : ''}${S.season ? `<dt>Revenue this season</dt><dd>${money(st.earned)}</dd>` : ''}${hist.map(([yr, v]) => `<dt>${yr}</dt><dd>${money(v)}</dd>`).join('')}</dl>
+  ${coActive(c, y) && /^Lumber company/.test(c.kind) ? '<p class="fine">Counting only its boats and their wharf: the company\'s mills and lumber camps employed hundreds more.</p>' : ''}
   ${st.gone ? `<p class="fine">Taken over by ${esc(S.company)} in ${st.gone.y} for ${money(st.gone.paid)}.</p>` : !coActive(c, y) ? '<p class="fine">No longer in business.</p>' : c.listed
     ? `<div class="row"><button class="btn wide" data-act="select" data-t="stock" data-id="${id}">Its shares · ${fmtPx(sharePrice(id))}${S.mkt.hold[id] ? `, you hold ${pctOf(S.mkt.hold[id], id)}` : `, ${fmtN(own(id).float)} on the market`}</button></div>`
     : `<div class="row"><button class="btn wide" data-act="offer" data-id="${id}" ${st.refused === S.year ? 'disabled' : ''}>Make the owners an offer</button></div><p class="fine">${st.refused === S.year ? 'They turned you down this season. They will hear another offer next year.' : 'A family firm with no shares on the market. The owners sell only if the price is right.'}</p>`}
