@@ -286,6 +286,7 @@ table.cargo td.n{text-align:right}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .title-rank{font-family:var(--font-display);font-size:clamp(34px,7vw,52px);line-height:1;text-align:center;margin:0;color:var(--magenta)}
 .namefield{display:flex;gap:8px;align-items:center}
+.item.board{cursor:default} .item.board.you{background:var(--surface-2)} .item .rank{font:700 18px var(--font-chart);text-align:center;color:var(--ink-2)}
 .namefield input{-webkit-user-select:text;user-select:text;flex:1;min-width:0;font:inherit;font-size:16px;min-height:44px;border:1px solid var(--rule);border-radius:4px;padding:0 10px;background:var(--surface);color:var(--ink)}
 
 @media (max-width: 899px){
@@ -5439,7 +5440,8 @@ function titleHTML(saved) {
   </ol>
   <p class="fine">Pinch, scroll or double-tap to zoom in, drag to move around, and tap anything on the map. The corner button brings back the whole bay. The years roll on for as long as you like to play.</p>
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="newGameYes">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
-  ${playNotice()}${homeHint()}`;
+  ${playNotice()}${homeHint()}
+  ${BOARD.on ? `${BOARD.name ? '' : boardNameHTML('title')}<div class="row"><button class="btn wide ghost" data-act="board">Family scoreboard</button></div>` : ''}`;
 }
 // On the standalone copy in an iPad's browser: how to put it on the home screen, where it opens full screen like an app
 const asApp = () => navigator.standalone === true || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
@@ -5530,13 +5532,53 @@ function toggleFull() {
   const f = e.requestFullscreen || e.webkitRequestFullscreen; if (!f) return;
   try { Promise.resolve(f.call(e)).catch(() => toast('This browser won’t show the game full screen here.', true)); } catch (err) { toast('This browser won’t show the game full screen here.', true); }
 }
-// A page can only go full screen from a tap, so on a touch screen the first tap into the game (Open the season,
-// Continue, New game) asks for it, once a visit. Where it isn't allowed, nothing happens.
-let autoFullTried = false;
-function autoFull() {
-  if (autoFullTried || isFull() || !canFull() || !matchMedia('(pointer: coarse)').matches) return;
-  autoFullTried = true; const e = document.documentElement, f = e.requestFullscreen || e.webkitRequestFullscreen;
-  try { const r = f && f.call(e); if (r && r.catch) r.catch(() => {}); } catch (err) {}
+/* =====================================================================
+   The family scoreboard, on the game's own site: each game reports, every few minutes while it is open, who is
+   playing (the name they give), their company, its year, worth, standing and fleet, and how long they have played;
+   the board (functions/api/board.js, kept in Cloudflare KV) shows everyone, best first, with when they last played.
+   ===================================================================== */
+const BOARD = { on: !inClaude && !window.__noBoard, id: '', name: '', mark: 0, started: false };
+try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '' }); } catch (e) { /* storage blocked */ }
+const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name })); } catch (e) { /* storage blocked */ } };
+if (!BOARD.id) { BOARD.id = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => (b % 36).toString(36)).join(''); boardSave(); }
+const deviceName = () => { const u = navigator.userAgent; return /iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'computer'; };
+function boardReport(start, leaving) {
+  if (!BOARD.on || !S || navigator.onLine === false) return;
+  const t = performance.now(), minutes = BOARD.mark ? Math.min(15, (t - BOARD.mark) / 60000) : 0; BOARD.mark = leaving ? 0 : t;
+  const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, company: S.company, year: S.year, worth: Math.round(nw), title: titleFor(nw),
+    boats: S.tugs.filter(x => x.owner === 'p').length, device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
+  try {
+    if (leaving && navigator.sendBeacon) navigator.sendBeacon('api/board', new Blob([body], { type: 'application/json' }));
+    else fetch('api/board', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  } catch (e) { /* offline, or no scoreboard */ }
+}
+function boardStart() {
+  if (!BOARD.on || BOARD.started) return; BOARD.started = true; BOARD.mark = performance.now(); boardReport(true);
+  setInterval(() => { if (!document.hidden) boardReport(); }, 5 * 60000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) boardReport(false, true); else BOARD.mark = performance.now(); });
+}
+const boardAgo = ms => { const m = ms / 60000; return m < 2 ? 'just now' : m < 60 ? `${Math.round(m)} minutes ago` : m < 120 ? 'an hour ago' : m < 1440 ? `${Math.round(m / 60)} hours ago` : m < 2880 ? 'yesterday' : `${Math.round(m / 1440)} days ago`; };
+const playedText = min => min < 1 ? 'a few minutes' : min < 60 ? `${Math.round(min)} min` : `${Math.floor(min / 60)} h ${Math.round(min % 60)} min`;
+function boardNameHTML(where) {
+  return `<div class="namefield"><label for="playerName" class="fine">${where === 'title' ? 'Your name, for the family scoreboard' : 'Your name on the board'}</label><input id="playerName" maxlength="30" value="${esc(BOARD.name)}" placeholder="Dad, Mom…" autocomplete="off"><button class="btn" data-act="boardName" data-where="${where}">Save</button></div>`;
+}
+async function openBoard() {
+  showModal(`<h2>Family scoreboard</h2><p class="fine">Fetching the scoreboard…</p>`);
+  let data = null; try { const r = await fetch('api/board', { cache: 'no-store' }); data = r.ok ? await r.json() : r.status === 503 ? { off: true } : null; } catch (e) { /* offline */ }
+  if (ui.modalOpen && $('#modalBody h2') && /scoreboard/i.test($('#modalBody h2').textContent)) showModal(boardHTML(data));
+}
+function boardHTML(data) {
+  const head = `<div class="rules"><span>Tugboat Tycoon</span><span>Who's playing</span></div><h2>Family scoreboard</h2>`, close = '<div class="row"><button class="btn primary wide" data-act="closeModal">Close</button></div>';
+  if (!data) return `${head}<p class="desc">The scoreboard needs a connection. Try again when you're online.</p>${close}`;
+  if (data.off) return `${head}<p class="desc">The scoreboard isn't switched on yet.</p>${close}`;
+  const ps = (data.players || []).slice().sort((a, b) => (b.worth || 0) - (a.worth || 0));
+  const row = (p, i) => `<li><div class="item board${p.id === BOARD.id ? ' you' : ''}"><span class="rank">${i + 1}</span><span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">You</span>' : ''}</b>
+    <small>${esc(p.company || '')}${p.year ? `, ${p.year}` : ''} · ${p.boats || 0} boat${p.boats === 1 ? '' : 's'}</small>
+    <small>Last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${p.app ? 'the' : /^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}${p.app ? ' home screen' : ''}` : ''} · ${playedText(p.minutes || 0)} in all</small></span>
+    <span class="side">${money(p.worth || 0)}<small>${esc(p.title || '')}</small></span></div></li>`;
+  return `${head}${ps.length ? `<ul class="list">${ps.map(row).join('')}</ul>` : '<p class="desc">No one has played yet.</p>'}
+  <p class="fine">Ranked by what each company is worth. A game reports in every few minutes while it's open.</p>
+  ${boardNameHTML('board')}${close}`;
 }
 function menuHTML() {
   const saved = loadSaved();
@@ -5548,6 +5590,7 @@ function menuHTML() {
   <p class="fine">Your game is kept on this device only. To carry on somewhere else, send it (by Mail, Messages, AirDrop or anything that sends a file), then open the game there and load the file.</p>
   ${ui.confirmNew ? `<div class="confirm"><b>Start over in 1870? This game will be lost unless you saved it.</b><div class="row"><button class="btn danger wide" data-act="newGameYes">Start over</button><button class="btn wide" data-act="newGameNo">Keep playing</button></div></div>` : '<button class="btn" data-act="newGame">New game</button>'}
   ${playLog.owner && playLog.db ? '<div class="row"><button class="btn wide" data-act="players">Who\'s been playing</button></div>' : ''}
+  ${BOARD.on ? '<div class="row"><button class="btn wide" data-act="board">Family scoreboard</button></div>' : ''}
   ${soundMenuHTML()}
   ${gfxMenuHTML()}
   <h3>How to play</h3>
@@ -5575,7 +5618,7 @@ const ACTS = {
   share: () => shareCompany(),
   sendGame: () => sendGame(),
   loadGameFile: () => pickGameFile(),
-  loadGameYes: () => { if (!pendingGame) return; S = pendingGame; pendingGame = null; afterLoad(); saveGame(true); ui.queue = []; closeModal(); toast(`Loaded ${S.company}, ${S.year}.`); },
+  loadGameYes: () => { if (!pendingGame) return; boardStart(); S = pendingGame; pendingGame = null; afterLoad(); saveGame(true); ui.queue = []; closeModal(); toast(`Loaded ${S.company}, ${S.year}.`); },
   shareCopy: () => shareCopy(),
   shareSave: () => shareSave(),
   sound: () => setSound(!SND.on),
@@ -5591,6 +5634,9 @@ const ACTS = {
     ui.panelDirty = true; },
   pvClose: () => closePlans(),
   players: () => openPlayers(),
+  board: () => openBoard(),
+  boardName: el => { const i = $('#playerName'); BOARD.name = (i ? i.value : '').trim().slice(0, 30); boardSave(); toast(BOARD.name ? `Saved. You're ${BOARD.name} on the scoreboard.` : 'Saved.'); if (BOARD.started) boardReport();
+    if (el.dataset.where === 'title') showModal(titleHTML(loadSaved())); else openBoard(); },
   pvFit: () => pvFit(),
   pvZoom: el => { const r = pvRect(); pvZoomAt(+el.dataset.v > 0 ? 1.6 : 1 / 1.6, r.width / 2, r.height / 2); },
   pick: el => { if (performance.now() - +$('#picker').dataset.at < 350) return; hidePicker(); select({ t: el.dataset.t, id: el.dataset.id }); },
@@ -5660,17 +5706,17 @@ const ACTS = {
   sellYes: () => { const t = tugSel(); if (t) sellTug(t); },
   build: el => { if (ui.sel && ui.sel.t === 'port') build(el.dataset.what, ui.sel.id); },
   closeModal: () => closeModal(),
-  play: () => { autoFull(); closeModal(); saveGame(true); if (!tourSeen()) startTour(); },
+  play: () => { closeModal(); saveGame(true); boardStart(); if (!tourSeen()) startTour(); },
   tour: () => startTour(),
   tourNext: () => { if (!tour) return; if (TOUR[tour.i].last) endTour(true); else tourShow(tour.i + 1); },
   tourBack: () => { if (tour) tourShow(tour.i - 1); },
   tourSkip: () => endTour(true),
-  continue: () => { autoFull(); const s = loadSaved(); if (s) { S = s; afterLoad(); } closeModal(); },
+  continue: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); } closeModal(); boardStart(); },
   save: () => { saveGame(false); closeModal(); },
   load: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); toast(`Loaded your ${S.year} game.`); } closeModal(); },
   newGame: () => { ui.confirmNew = true; showModal(menuHTML()); },
   newGameNo: () => { ui.confirmNew = false; showModal(menuHTML()); },
-  newGameYes: () => { autoFull(); ui.queue = []; newGame(); afterLoad(); closeModal(); if (!tourSeen()) startTour(); },
+  newGameYes: () => { ui.queue = []; newGame(); afterLoad(); closeModal(); boardStart(); if (!tourSeen()) startTour(); },
   startSeason: () => { closeModal(); startSeason(); saveGame(true); },
   newsAll: () => { select(null); $('#panel').classList.remove('collapsed'); },
 };
@@ -6773,7 +6819,7 @@ function start(data) {
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
 }
-window.__tugboatMap = MAP; window.__tugboat = { GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
+window.__tugboatMap = MAP; window.__tugboat = { BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
     for (const type of ['schooner2', 'schooner3', 'steambarge', 'laker', 'canaller', 'passenger']) { [0, .8, 1.57, 2.6, 3.14, -1.57].forEach((a, i) => { const v = { type, name: type, lenFt: type === 'laker' ? 500 : type === 'canaller' ? 255 : type === 'steambarge' ? 190 : 130, loaded: i % 2 === 0, cargo: 'lumber', hue: '#2f3a40' }; const L = shipLen(v); ctx.save(); ctx.translate(60 + i * 110, y); ctx.scale(scale / 2, scale / 2); ctx.rotate(a); drawShipBody(v, L, a, 0, false); ctx.restore(); }); y += 95; } ctx = keep; }, addShip, shipType, seaPath, shipsDay, advance(days) { for (let d = 0; d < days; d += .05) { simAdvance(.05); moveTraffic(.05); if (Math.floor(S.day) !== lastTrafficDay) { lastTrafficDay = Math.floor(S.day); trafficDay(); } } }, vehicles,  get WET() { return WET; }, CELL, isWet, NETPOS, RAIL_SEGS, ROAD_SEGS, ll, homeView, renderHI, clampCam, get fling() { return fling; }, get gesture() { return gesture; }, get HI() { return HI; }, get S() { return S; }, simAdvance, startSeason, endSeason, newGame, PORT, GROUND, MODELS, getPath, nodePos, deliveryValue, distKm, buyTug, saveRoute, assignGround, netWorth, ui, select, cam, get GW() { return GW; }, get GH() { return GH; }, get WATER() { return WATER; } };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();

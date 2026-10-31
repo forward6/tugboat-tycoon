@@ -24,7 +24,7 @@ The game has sound, all made in the browser with the Web Audio API (nothing to d
 
 A share button (in the top bar, in the winter report, and when the papers give you a new title) sends a short message about your company, with a newspaper-style picture card showing your flagship, through the device's share sheet: Messages, Mail and the rest. Where the page may not open the share sheet, it offers to copy the message, start an email or a text, or save the picture. `GAME_URL` in `src/game.html` is the link the message carries.
 
-A game is kept in the browser of the device it is played on. Menu, Another device, Send this game makes a small file of it (a few tens of kilobytes) and offers it to the share sheet (Mail, Messages, AirDrop) or saves it; Load a game from a file, on the other device, checks the file and, after asking, replaces the game there. Where the browser lets the page go full screen, the menu has Play full screen, and on a touch screen the first tap into the game (Open the season, Continue, New game) goes full screen by itself, once a visit (a page can't go full screen without a tap). Inside claude.ai's artifact view it usually can't, and neither happens.
+A game is kept in the browser of the device it is played on. Menu, Another device, Send this game makes a small file of it (a few tens of kilobytes) and offers it to the share sheet (Mail, Messages, AirDrop) or saves it; Load a game from a file, on the other device, checks the file and, after asking, replaces the game there. Where the browser lets the page go full screen, the menu has Play full screen. Inside claude.ai's artifact view it usually can't, and the button is hidden.
 
 On a first game a guided tour walks a new player through the map, their boats, routes, fishing, towns, time, the weather, the company panel, tows and the menu, one thing at a time with the rest of the screen dimmed. It can be taken again from the menu (How to play).
 
@@ -62,6 +62,10 @@ The country has real relief, from Mapzen's terrain tiles (open data on Amazon, f
 ## Hosting: GitHub and Cloudflare Pages
 
 The sources live in a GitHub repository; Cloudflare Pages builds and serves the standalone copy from it, and builds again on every push to `main`. Its settings: framework preset None, build command `python3 tools/build.py && python3 tools/site.py`, build output directory `site`. The built files (`index.html`, `site/`, `dist/`) are not kept in the repository. Added to an iPad's home screen, the site opens full screen like an app. The game is played at https://tugboat-tycoon.pages.dev; the earlier claude.ai artifact is no longer updated.
+
+## The family scoreboard
+
+On the game's own site, each game reports in to `/api/board` (`functions/api/board.js`, a Cloudflare Pages Function) when play starts, every five minutes while it is open, and when it is put away: the name the player gives on the title screen, their company, its year, worth, standing and fleet, the device, and the minutes played. The board is one record in Workers KV, bound to the Pages project as `PLAYS`. Menu, Family scoreboard (also on the title screen) shows everyone, ranked by worth, with when each last played and how long they have played in all; the player can change their name there. Anyone with the game's address can read it. Without the KV binding the function answers that the scoreboard isn't set up, and the game says so. A random id in the browser's storage tells players apart, so a player on two devices shows twice.
 
 ## The standalone copy
 
