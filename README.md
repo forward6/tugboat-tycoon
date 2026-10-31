@@ -30,6 +30,8 @@ A game is kept in the browser of the device it is played on. Menu, Another devic
 
 On a first game a guided tour walks a new player through the map, their boats, routes, fishing, towns, time, the weather, the company panel, tows and the menu, one thing at a time with the rest of the screen dimmed. It can be taken again from the menu (How to play).
 
+Menu, History (below How to play) opens The bay through the years: a timeline from 1870 to today of real events on Georgian Bay and the world that shaped it, from the Red River Expedition sailing from Collingwood and the loss of the Waubuno and the Asia, through the railways, the pine years, the Great Storm of 1913, the wars and the Depression, the sea lamprey and the Seaway, to the CPR's last passenger sailings, the Biosphere Reserve, record low and high water, and the Robinson-Huron Treaty settlement of 2023. It is a horizontal bar you swipe along, with dots coloured by kind (ships and wrecks, railways and roads, timber, fish and trade, wars and the world, water, fish and parks, First Nations and government), bands for the eras, and a dashed line at your game's date; tap a dot, or Earlier and Later, to read about it. Events your game hasn't reached yet are paler and say so. The events are `HISTORY` in `src/game.html`; dates were checked against public sources (Ontario Heritage Trust plaques, the Canadian Encyclopedia, Parks Canada, the Great Lakes Fishery Commission and others).
+
 ## Files
 
 - `src/game.html` is the whole game: styles, the map renderer, the simulation and the UI.

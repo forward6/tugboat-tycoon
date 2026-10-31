@@ -238,6 +238,30 @@ table.cargo td.n{text-align:right}
 .stops li::before{content:counter(s);width:22px;height:22px;border-radius:50%;border:1.5px solid var(--magenta);color:var(--magenta);display:grid;place-items:center;font-size:12px}
 .stops li.next::after{content:"next";font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
 .confirm{border:1px solid var(--bad);border-radius:4px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.tl-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border:1px solid var(--rule);border-radius:4px;background:var(--surface-2);overscroll-behavior-x:contain;scrollbar-width:thin}
+.tl-track{position:relative;height:var(--tlh,168px)}
+.tl-era{position:absolute;top:6px;height:18px;border-radius:3px;background:var(--surface);border:1px solid var(--c);background:color-mix(in srgb,var(--c) 18%,transparent);border-color:color-mix(in srgb,var(--c) 45%,transparent);font-size:11px;font-weight:700;line-height:16px;padding:0 6px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+.tl-axis{position:absolute;left:0;right:0;bottom:30px;border-top:2px solid var(--ink)}
+.tl-tick{position:absolute;bottom:12px;font-size:11px;font-weight:700;color:var(--ink-2);transform:translateX(-50%);font-variant-numeric:tabular-nums}
+.tl-tick::before{content:'';position:absolute;left:50%;top:-8px;height:6px;border-left:1px solid var(--ink)}
+.tl-tick.big{color:var(--ink);font-size:12px}
+.tl-tick.big::before{top:-11px;height:9px;border-left-width:2px}
+.tl-dot{position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border:0;padding:0;background:none;cursor:pointer;display:grid;place-items:center}
+.tl-dot::after{content:'';width:13px;height:13px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px var(--surface-2)}
+.tl-dot.on::after{width:17px;height:17px;box-shadow:0 0 0 2px var(--surface-2),0 0 0 4px var(--ink)}
+.tl-dot.later::after{opacity:.55}
+.tl-stem{position:absolute;bottom:30px;border-left:1px dotted var(--c);border-left-color:color-mix(in srgb,var(--c) 70%,transparent)}
+.tl-now{position:absolute;top:28px;bottom:30px;border-left:2px dashed var(--magenta)}
+.tl-now span{position:absolute;bottom:100%;left:-1px;transform:translateX(-50%);white-space:nowrap;font-size:11px;font-weight:800;color:var(--magenta);background:var(--surface-2);padding:0 4px;margin-bottom:-14px}
+.tl-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--ink-2)}
+.tl-legend span{display:inline-flex;align-items:center;gap:6px}
+.tl-legend i{width:11px;height:11px;border-radius:50%;background:var(--c)}
+.tl-card{border:1px solid var(--rule);border-radius:4px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-height:118px;box-sizing:border-box}
+.tl-card .when{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.tl-card .when i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.tl-card h4{margin:0;font-family:var(--font-display);font-weight:400;font-size:21px;line-height:1.15}
+.tl-card p{margin:0}
+.tl-card .soon{font-size:12.5px;color:var(--magenta);font-weight:700}
 .bids{list-style:none;margin:0;padding:0}
 .bids li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:15px}
 .bids li span{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -5860,6 +5884,115 @@ function boardHTML(data) {
   <p class="fine">Ranked by what each company is worth. A game reports in every few minutes while it's open.</p>
   ${boardNameHTML('board')}${close}`;
 }
+/* ---------- The bay's history, 1870 to today: real events on and around Georgian Bay, and what shaped it ----------
+   [year, month, kind, headline, what happened]. Kinds: ships, land (railways and roads), trade (timber, fish, trade and
+   industry), world (wars and the world), nature (the water, its fish and its parks), people (First Nations and government). */
+const TL_KINDS = { ships: ['Ships and wrecks', '--coast'], land: ['Railways and roads', '--c-logs'], trade: ['Timber, fish and trade', '--warn'],
+  world: ['Wars and the world', '--bad'], nature: ['Water, fish and parks', '--good'], people: ['First Nations and government', '--magenta'] };
+const TL_ERAS = [[1870, 1910, 'The pine years', '--c-logs'], [1914, 1918.9, 'First World War', '--bad'], [1929.8, 1939.5, 'The Depression', '--warn'],
+  [1939.7, 1945.6, 'Second World War', '--bad'], [1959.3, 0, 'The Seaway era', '--coast']];
+const HISTORY = [
+  [1870, 5, 'world', 'The Red River Expedition sails from Collingwood', "Colonel Wolseley's troops took steamers from Collingwood up the lakes, on their way to Red River and the new province of Manitoba."],
+  [1871, 10, 'trade', 'Chicago burns', 'The Great Chicago Fire levelled the heart of the city. Rebuilding it took every board the lakes could cut, and lumber prices soared.'],
+  [1872, 6, 'land', 'The railway reaches Meaford', 'The Northern Extension Railway opened from Collingwood along the shore to Meaford.'],
+  [1873, 6, 'land', 'The railway reaches Owen Sound', 'The Toronto, Grey and Bruce Railway reached Owen Sound, which grew into the busiest port on the bay.'],
+  [1873, 9, 'world', 'The Panic of 1873', 'A financial panic in New York began years of hard times. Lumber and freight rates fell for most of the decade.'],
+  [1874, 6, 'people', 'A treaty payment frozen at $4', 'The yearly payment to the Anishinaabe of the Robinson-Huron Treaty of 1850, which covers the east and north shores of the bay, rose to $4 a person. It stayed at $4 for the next 150 years.'],
+  [1874, 7, 'trade', 'Steam comes to the fishery', 'The first steam fish tugs set gill nets on the bay, far out and in weather the sailing skiffs could not face.'],
+  [1876, 5, 'nature', 'Storm signals on the lakes', "Canada's weather service began hoisting storm signals at the lake ports to warn boats of coming gales."],
+  [1879, 3, 'land', 'Railways reach Midland and Penetanguishene', 'The Midland Railway reached its new town of Midland, and the Northern Railway reached Penetanguishene.'],
+  [1879, 3, 'trade', 'The National Policy', "Sir John A. Macdonald's tariffs put duties on imports, American coal among them, to build up Canadian industry."],
+  [1879, 11, 'ships', 'The Waubuno is lost', 'The paddle steamer Waubuno vanished in a November gale on her run from Collingwood to Parry Sound. All aboard, some two dozen people, were lost.'],
+  [1880, 5, 'trade', "Michigan's pine runs short", "Michigan's sawmills had cut most of their own pine and began to buy logs from the Georgian Bay shore."],
+  [1882, 9, 'ships', 'The Asia sinks', 'The steamer Asia foundered in a gale off the eastern shore, bound for the French River. Two of the roughly 120 people aboard survived: the worst shipwreck in the history of the bay.'],
+  [1884, 5, 'ships', "The CPR's steamers sail from Owen Sound", 'The Canadian Pacific Railway began its own steamer service from Owen Sound to Port Arthur on Lake Superior.'],
+  [1885, 5, 'trade', 'Log rafts for Michigan', 'Huge rafts of Georgian Bay logs were towed across Lake Huron to the sawmills of the Saginaw River.'],
+  [1885, 11, 'land', 'The last spike', 'The Canadian Pacific Railway was finished across the country. While the line round Lake Superior was built, its men and supplies had gone west by boat from Georgian Bay.'],
+  [1893, 4, 'trade', 'A warning about the fish', 'A Dominion commission found the bay being fished out, whitefish and trout alike, much of the catch shipped to American buyers. It called for closed seasons and limits on nets.'],
+  [1893, 5, 'nature', 'Algonquin Park', 'Ontario set aside Algonquin Park, the high country where the Muskoka and Magnetawan rivers begin their run to the bay.'],
+  [1897, 7, 'trade', 'The Dingley Tariff', 'The United States raised its duty on Canadian lumber.'],
+  [1897, 9, 'land', 'Depot Harbour opens', "J. R. Booth's Ottawa, Arnprior and Parry Sound Railway reached its new port on Parry Island, to carry prairie grain from the lake boats east by rail."],
+  [1898, 5, 'trade', 'Logs must be sawn in Ontario', 'Ontario ruled that pine cut on Crown land had to be sawn in Ontario. The log rafts to Michigan stopped, and new sawmills went up around the bay.'],
+  [1908, 6, 'ships', 'A canal that was never built', 'Engineers reported on a Georgian Bay Ship Canal from the French River through Lake Nipissing to the Ottawa River. It was never built; Canada rebuilt the Welland Canal instead.'],
+  [1911, 9, 'world', 'Free trade voted down', "Sir Wilfrid Laurier's government lost an election fought over free trade with the United States."],
+  [1912, 5, 'ships', 'The CPR moves to Port McNicoll', 'The Canadian Pacific moved its lake steamers from Owen Sound to its new port at Port McNicoll, with a huge grain elevator.'],
+  [1913, 11, 'ships', 'The Great Storm', 'The worst storm in the history of the Great Lakes wrecked 19 ships and killed more than 250 sailors in four days, most of them on Lake Huron.'],
+  [1914, 8, 'world', 'War', 'Canada went to war. Men left the boats and the mills for the army, and wartime prices drove freight rates up.'],
+  [1916, 9, 'people', 'Ontario goes dry', 'The Ontario Temperance Act closed the bars and liquor stores across the province.'],
+  [1918, 11, 'world', 'The Armistice', 'The First World War ended. More than 60,000 Canadians had died.'],
+  [1921, 11, 'nature', 'A strange fish in Lake Erie', 'A fisherman caught a sea lamprey in Lake Erie, the first ever seen above Niagara Falls. It had come up through the Welland Canal.'],
+  [1923, 10, 'people', 'The Williams Treaties', 'Canada and Ontario signed treaties with seven Anishinaabe First Nations covering land around the southeast corner of the bay and Lake Simcoe.'],
+  [1927, 6, 'people', 'Ontario ends prohibition', 'Ontario opened government liquor stores under the new Liquor Control Board.'],
+  [1929, 5, 'nature', 'Georgian Bay Islands National Park', 'Canada made a national park of islands at the southeast end of the bay, among them Beausoleil Island.'],
+  [1929, 10, 'world', 'The crash', 'The stock market crashed in New York, and the Great Depression followed. Lake trade fell by more than half.'],
+  [1932, 8, 'ships', 'The new Welland Canal opens', 'Big lake freighters could now sail between Lake Erie and Lake Ontario.'],
+  [1933, 5, 'land', 'The Algonquin line is cut', "A damaged trestle in Algonquin Park cut Booth's railway to Depot Harbour, and the grain trade there withered."],
+  [1937, 6, 'nature', 'The lamprey reaches Lake Huron', 'Sea lampreys spread into Lake Huron, where they fed on lake trout and whitefish.'],
+  [1939, 9, 'world', 'War again', 'Canada declared war on Germany on 10 September 1939.'],
+  [1940, 7, 'ships', 'Corvettes from the bay', 'The shipyards at Collingwood and Midland built corvettes and minesweepers to guard the Atlantic convoys.'],
+  [1945, 5, 'world', 'Peace in Europe', 'The Second World War ended in Europe in May and in the Pacific in August.'],
+  [1949, 9, 'ships', 'The Noronic burns', 'Fire swept the passenger steamer Noronic at her Toronto pier, killing at least 118 people. Strict new fire rules retired many of the old wooden passenger steamers on the lakes.'],
+  [1950, 6, 'nature', 'The lake trout are gone', "Lampreys and heavy fishing had all but wiped out Lake Huron's lake trout, and the fish tugs that lived on them."],
+  [1952, 7, 'land', 'Highway 400 opens', "Ontario's first controlled-access highway opened from Toronto to Barrie, bringing the bay within a few hours' drive of the city."],
+  [1955, 10, 'nature', 'The Great Lakes Fishery Commission', 'Canada and the United States set up a joint commission to fight the sea lamprey and restore the fisheries.'],
+  [1959, 4, 'ships', 'The St. Lawrence Seaway opens', 'Ocean ships could sail from the Atlantic into the heart of the continent, and the lakes trade changed for good.'],
+  [1965, 11, 'ships', "The CPR's last passenger sailings", 'The Assiniboia and the Keewatin made their last passenger trips from Port McNicoll to the Lakehead.'],
+  [1968, 9, 'trade', 'Nuclear power on Lake Huron', "Douglas Point, Canada's first full-size nuclear station, went into service on the Lake Huron shore. The Bruce station beside it followed from 1977."],
+  [1972, 4, 'nature', 'Cleaning up the lakes', 'Canada and the United States signed the Great Lakes Water Quality Agreement to cut the pollution in the lakes.'],
+  [1986, 9, 'ships', 'The Collingwood shipyard closes', "Collingwood's shipyard, famous for launching ships sideways into the harbour, closed. Its last was the Coast Guard's Sir Wilfrid Laurier."],
+  [1986, 10, 'nature', 'The highest water on record', 'Lakes Michigan and Huron reached their highest level since records began.'],
+  [1987, 7, 'nature', 'Bruce Peninsula and Fathom Five', "Two national parks were created at the tip of the Bruce Peninsula, among them Fathom Five, Canada's first national marine park, with its many shipwrecks."],
+  [1988, 6, 'nature', 'Zebra mussels arrive', 'Zebra mussels from Europe, carried in ships\' ballast water, were found in Lake St. Clair. Within a few years they had spread through the lakes.'],
+  [2004, 10, 'nature', 'The Georgian Bay Biosphere', "UNESCO named the eastern shore, from Port Severn to the French River, a biosphere reserve. It takes in the world's largest freshwater archipelago."],
+  [2012, 6, 'ships', 'The Keewatin comes home', "The CPR's old passenger steamer Keewatin was towed back to Port McNicoll, 46 years after she left, to be a museum ship."],
+  [2013, 1, 'nature', 'The lowest water on record', 'Lakes Michigan and Huron fell to their lowest level since records began, leaving docks high and dry around the bay.'],
+  [2018, 11, 'people', 'The Williams Treaties settlement', 'Canada and Ontario settled with the seven Williams Treaties First Nations, recognising their rights to hunt and fish on their treaty lands.'],
+  [2020, 7, 'nature', 'High water again', 'Seven years after their record low, Lakes Michigan and Huron set monthly high-water records through 2019 and 2020.'],
+  [2023, 6, 'people', '$10 billion for a broken promise', "Canada and Ontario agreed to pay $10 billion to the 21 First Nations of the Robinson-Huron Treaty for the payments frozen at $4 since 1874."],
+].map(([y, m, k, head, body]) => ({ y, m, k, head, body, at: y + (m - .5) / 12 }));
+const TL0 = 1870, TL_PX = 18, TL_PAD = 60;
+const tlEnd = () => Math.max(2026, new Date().getFullYear()) + 1;
+const tlX = at => Math.round(TL_PAD + (at - TL0) * TL_PX);
+const tlGame = () => S ? yearFrac(S.day) : TL0;
+// Dots go in rows, the first row with room for them, so none overlap
+function tlRows() {
+  const last = [], rows = HISTORY.map(e => { const x = tlX(e.at); let r = 0; while (last[r] != null && x - last[r] < 24) r++; last[r] = x; return r; });
+  return { rows, n: last.length };
+}
+function historyHTML() {
+  const end = tlEnd(), W = tlX(end) + TL_PAD, { rows, n } = tlRows(), H = 40 + n * 26 + 40, axis = H - 30, game = tlGame();
+  const ticks = []; for (let y = TL0; y <= end; y += 10) ticks.push(`<span class="tl-tick${y % 50 === 0 ? ' big' : ''}" style="left:${tlX(y)}px">${y}</span>`);
+  const eras = TL_ERAS.map(([a, b, t, c]) => `<span class="tl-era" style="left:${tlX(a)}px;width:${tlX(b || end) - tlX(a)}px;--c:var(${c})" title="${esc(t)}">${esc(t)}</span>`).join('');
+  const dots = HISTORY.map((e, i) => { const x = tlX(e.at), y = axis - 22 - rows[i] * 26;
+    return `<i class="tl-stem" style="left:${x}px;top:${y}px;--c:var(${TL_KINDS[e.k][1]})"></i><button class="tl-dot${e.at > game && e.y <= 1959 ? ' later' : ''}" data-act="tlPick" data-i="${i}" style="left:${x}px;top:${y}px;--c:var(${TL_KINDS[e.k][1]})" aria-label="${e.y}: ${esc(e.head)}"></button>`; }).join('');
+  const now = S ? `<div class="tl-now" style="left:${tlX(game)}px"><span>Your game, ${Math.floor(game)}</span></div>` : '';
+  return `<div class="rules"><span>Georgian Bay &amp; the North Channel</span><span>1870 to today</span></div>
+  <h2>The bay through the years</h2>
+  <p class="fine">Real events on the bay and around it, and the wider world that shaped it. Swipe along the bar and tap a dot.</p>
+  <div class="tl-scroll" id="tlScroll"><div class="tl-track" style="width:${W}px;--tlh:${H}px">${eras}${now}<div class="tl-axis" style="bottom:30px"></div>${ticks.join('')}${dots}</div></div>
+  <div class="tl-legend">${Object.values(TL_KINDS).map(([t, c]) => `<span style="--c:var(${c})"><i></i>${esc(t)}</span>`).join('')}</div>
+  <div class="tl-card" id="tlCard" aria-live="polite"></div>
+  <div class="row"><button class="btn wide" data-act="tlStep" data-v="-1">‹ Earlier</button><button class="btn wide" data-act="tlStep" data-v="1">Later ›</button></div>
+  <div class="row"><button class="btn wide ghost" data-act="menu">Back to the menu</button><button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
+}
+let tlSel = 0;
+function tlPick(i, scroll) {
+  tlSel = clamp(i, 0, HISTORY.length - 1);
+  const e = HISTORY[tlSel], [kind, c] = TL_KINDS[e.k], card = $('#tlCard'); if (!card) return;
+  card.style.setProperty('--c', `var(${c})`);
+  card.innerHTML = `<span class="when"><i></i>${MONTHS[e.m - 1]} ${e.y} · ${esc(kind)}</span><h4>${esc(e.head)}</h4><p class="desc">${esc(e.body)}</p>${S && e.at > tlGame() && e.y <= 1959 ? '<span class="soon">Still to come in your game.</span>' : ''}`;
+  for (const d of document.querySelectorAll('#modalBody .tl-dot')) d.classList.toggle('on', +d.dataset.i === tlSel);
+  const sc = $('#tlScroll'), x = tlX(e.at);
+  if (sc && scroll !== false && (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 40)) sc.scrollTo({ left: x - sc.clientWidth / 2, behavior: scroll === 'jump' ? 'auto' : 'smooth' });
+  const [prev, next] = document.querySelectorAll('#modalBody [data-act="tlStep"]'); if (prev) prev.disabled = tlSel === 0; if (next) next.disabled = tlSel === HISTORY.length - 1;
+}
+// Opens on the last thing that happened before your game's date
+function openHistory() {
+  showModal(historyHTML(), 'wide');
+  const g = tlGame(); let i = 0; HISTORY.forEach((e, j) => { if (e.at <= g) i = j; });
+  tlPick(i, 'jump');
+  const sc = $('#tlScroll'); if (sc) sc.scrollLeft = Math.max(0, tlX(g) - sc.clientWidth * .4);
+}
 function menuHTML() {
   const saved = loadSaved();
   return `<h2>Menu</h2>
@@ -5884,6 +6017,9 @@ function menuHTML() {
     <li>Tap a pulsing ship to race for a tow. Salvage needs a large tug.</li>
     <li>Cautious captains hide from forecast gales. Before 1876 the forecasts are often wrong.</li>
   </ol>
+  <h3>History</h3>
+  <div class="row"><button class="btn wide" data-act="history">The bay through the years, 1870 to today</button></div>
+  <p class="fine">A timeline of real events on Georgian Bay and the world around it.</p>
   <h3>About this map</h3>
   ${playNotice()}
   <p class="fine">Coastline, rivers and borders from Natural Earth (public domain); the forests, farms and rock are drawn to suit the country, not surveyed. The ports, railways, laws, boat types and dated events from 1870 to 1959 are real. The companies, captains, boats and schooners are invented, and some figures are simplified for play. Your saved game stays in this browser only.</p>
@@ -5911,6 +6047,9 @@ const ACTS = {
   gfxLight: el => { const sc = $('#modalBody').scrollTop; GFX.light = el.dataset.v; gfxSave(); showModal(menuHTML()); $('#modalBody').scrollTop = sc; },
   soundSet: el => { setSound(el.dataset.v === '1'); if ($('#modalBody .slider')) showModal(menuHTML()); },
   kAccept: el => { const k = contracts().find(k => k.id === el.dataset.id); if (acceptContract(k)) toast(`Signed with ${k.cust}.`); if (el.dataset.modal) { const h = offersHTML(); if (h) showModal(h); else closeModal(); } ui.panelDirty = true; },
+  history: () => openHistory(),
+  tlPick: el => tlPick(+el.dataset.i),
+  tlStep: el => tlPick(tlSel + +el.dataset.v),
   kBid: el => openTender(contracts().find(k => k.id === el.dataset.id), el.dataset.modal ? 'offers' : null),
   tDown: () => tenderStep(-1),
   tUp: () => tenderStep(1),

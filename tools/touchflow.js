@@ -46,7 +46,8 @@ const out = process.argv[2];
   await p.evaluate(() => { const T = window.__tugboat; while (T.S.season) T.simAdvance(1); });
   await p.waitForTimeout(400);
   // close any queued notices until the winter report shows
-  for (let i = 0; i < 4; i++) { if (await p.$('#modalBody [data-act="startSeason"]')) break; const c = await p.$('#modalBody [data-act="closeModal"]'); if (c) await c.tap(); await p.waitForTimeout(300); }
+  // past the season's letters: a rival's tender is answered by letting it go, anything else is closed
+  for (let i = 0; i < 6; i++) { if (await p.$('#modalBody [data-act="startSeason"]')) break; const c = await p.$('#modalBody [data-act="tPass"], #modalBody [data-act="tDone"], #modalBody [data-act="closeModal"]'); if (c) await c.tap(); await p.waitForTimeout(300); }
   await shot('8-winter');
   await tapBtn('[data-act="startSeason"]');
   await p.evaluate(() => { const T = window.__tugboat; T.ui.speed = 0; while (T.S.season && !T.ui.modalOpen) T.simAdvance(.5); });
