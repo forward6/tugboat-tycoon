@@ -267,6 +267,8 @@ table.cargo td.n{text-align:right}
 .riverpick select{font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
 .item small.oncontract{color:var(--magenta);font-weight:700}
 .item .kline{display:block;margin-top:5px;max-width:260px}
+.kvlink{all:unset;cursor:pointer;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px}
+.kvlink:focus-visible{outline:2px solid var(--magenta);outline-offset:2px}
 .bids{list-style:none;margin:0;padding:0}
 .bids li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:15px}
 .bids li span{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -2401,7 +2403,7 @@ function galeHit(t) {
     if (j) { S.jobs = S.jobs.filter(x => x !== j); if (who) addNews(`${who}'s towline parted in the gale and the ${j.name} drove ashore.`, { bad: true }); }
     t.jobTow = null; resume(t);
   }
-  if (t.nets != null && rand() < .25) { t.nets = null; if (t.owner === 'p') { S.cash -= 80; S.ledger.nets += 80; } }
+  if (t.nets != null && rand() < .25) { t.nets = null; if (t.owner === 'p') { S.cash -= 80; S.ledger.nets += 80; t.cost = (t.cost || 0) + 80; } }
   const sinkP = .006 * risk + (t.hull < 25 ? .08 : 0);
   if (rand() < sinkP || t.hull <= 0) sink(t);
 }
@@ -2465,8 +2467,8 @@ function dailyTick() {
     if (!isFish(t) && t.route.some(pid => S.ports[pid].built.coaldock)) op *= .8;
     if (t.state === 'idle') op *= .5;
     else if (t.state === 'laid') op *= LAID_COST;
-    running += op;
-    if (t.hull < 100 && !(galeNow() && (t.state === 'sail' || t.state === 'work'))) { const k = Math.min(t.at ? 4 : 1.5, 100 - t.hull); t.hull += k; repairs += k * 9; }
+    running += op; t.cost = (t.cost || 0) + op;
+    if (t.hull < 100 && !(galeNow() && (t.state === 'sail' || t.state === 'work'))) { const k = Math.min(t.at ? 4 : 1.5, 100 - t.hull); t.hull += k; repairs += k * 9; t.cost += k * 9; }
   }
   for (const t of S.tugs) if (t.owner === 'r' && t.hull < 100 && !galeNow()) t.hull = Math.min(100, t.hull + (t.at ? 4 : 1.5));
   const interest = S.loans * .06 / 365 + (S.cash < 0 ? -S.cash * .1 / 365 : 0);
@@ -2476,7 +2478,7 @@ function dailyTick() {
   for (const t of S.tugs.slice()) {
     if (t.state === 'sail' || t.state === 'work') { if (galeNow()) galeHit(t); }
     if (S.tugs.includes(t)) shelterCheck(t);
-    if (t.nets != null && galeNow() && t.state !== 'work' && rand() < .2) { t.nets = null; if (t.owner === 'p') { S.cash -= 80; S.ledger.nets += 80; } }
+    if (t.nets != null && galeNow() && t.state !== 'work' && rand() < .2) { t.nets = null; if (t.owner === 'p') { S.cash -= 80; S.ledger.nets += 80; t.cost = (t.cost || 0) + 80; } }
   }
   // jobs
   S.jobs = S.jobs.filter(j => {
@@ -2583,17 +2585,17 @@ function startSeason() {
   S.ledger.interest += interest;
   let refit = 0, prem = 0, lic = 0, ice = 0;
   for (const t of S.tugs) {
+    let own = 0;
     if (t.owner === 'p') {
-      refit += (100 - t.hull) * 9 + t.price * .02;
-      prem += tugValue({ ...t, hull: 100 }) * .04 * S.premiumMult;
-      if (isFish(t) && open >= D.fisheries) lic += 40;
+      const r = (100 - t.hull) * 9 + t.price * .02, pr = tugValue({ ...t, hull: 100 }) * .04 * S.premiumMult, li = isFish(t) && open >= D.fisheries ? 40 : 0;
+      refit += r; prem += pr; lic += li; own = r + pr + li;
     }
-    t.hull = 100; t.earn = 0;
+    t.hull = 100; t.earn = 0; t.cost = own;
   }
   for (const p of PORTS) { const P = S.ports[p.id]; if (P.built.icehouse) { ice += (120 - P.ice) * 1.5; P.ice = 120; } P.glut = {}; P.fishGlut = 0; P.shipped = { rail: 0, road: 0, lake: 0 }; P.lakeQ = 0; }
   S.ledger.refit = refit; S.ledger.premiums = prem; S.ledger.licences = lic; S.ledger.ice = ice;
   S.cash -= interest + refit + prem + lic + ice;
-  S.year = y; S.day = open; S.seasonClose = dayOf(y, 12, 3) + Math.floor(rand() * 8);
+  S.year = y; S.day = open; S.seasonOpen = open; S.seasonClose = dayOf(y, 12, 3) + Math.floor(rand() * 8);
   S.weather = { today: { k: 'moderate', dir: 'SW' }, tomorrow: rollWeather(open + 1), warn: false, galeLeft: 0 };
   // this spring's log drives
   for (const pid of ['french', 'spanish', 'byng', 'moonriver']) {
@@ -5014,7 +5016,7 @@ function companyHTML() {
     <dt>Bank loans</dt><dd>${money(S.loans)}</dd>
     <dt>Net worth</dt><dd>${money(netWorth())}</dd>
     <dt>Standing</dt><dd>${titleFor(netWorth())}</dd>
-    <dt>${S.season ? 'This season so far' : 'Last season'}</dt><dd class="${profit < 0 ? 'neg' : 'pos'}">${money(profit)}</dd>
+    <dt><button class="kvlink" data-act="season">${S.season ? 'This season so far' : 'Last season'}</button></dt><dd class="${profit < 0 ? 'neg' : 'pos'}"><button class="kvlink" data-act="season" aria-label="See the season boat by boat">${money(profit)} ›</button></dd>
   </dl>
   <div class="row"><button class="btn primary wide" data-act="shipyard">Buy a boat</button><button class="btn wide" data-act="bank">Bank</button></div>
   <div class="row"><button class="btn wide" data-act="select" data-t="exch">Stock exchange · ${fmtPx(sharePrice('me'))} a share${S.mkt.me.mine < SHARES ? `, you hold ${pctOf(S.mkt.me.mine)}` : ''}</button></div>
@@ -6067,6 +6069,37 @@ function newspaperHTML(e) {
   ${e.effect ? `<div class="effects"><b>For your company</b><ul>${e.effect.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
   <div class="row"><button class="btn primary wide" data-act="closeModal">Carry on</button></div>`;
 }
+// The season so far, boat by boat and share by share: tap "This season so far" on the company card
+function seasonHTML() {
+  const L = S.ledger, live = S.season, rev = ledgerRevenue(L) + L.sales, cost = ledgerCost(L), profit = rev - cost;
+  const boats = S.tugs.filter(t => t.owner === 'p').map(t => ({ t, e: t.earn || 0, c: t.cost || 0 })).sort((a, b) => (b.e - b.c) - (a.e - a.c));
+  const be = boats.reduce((a, b) => a + b.e, 0), bc = boats.reduce((a, b) => a + b.c, 0);
+  const signed = v => `<span class="${v < 0 ? 'neg' : v > 0 ? 'pos' : ''}">${v < 0 ? '−' : v > 0 ? '+' : ''}${money(Math.abs(v)).replace('−', '')}</span>`;
+  const row = ({ t, e, c }) => `<li><button class="item" data-act="seasonBoat" data-id="${t.id}">${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>Earned ${money(e)} · cost ${money(c)}${t.bought > (S.seasonOpen || 0) && yearOf(t.bought) === S.year ? ' · new this season' : ''}</small></span><span class="side">${signed(e - c)}</span></button></li>`;
+  // what isn't one boat's: interest, penalties, fines, dividends, insurance claims, sales; and anything not put down to a boat
+  const items = [['Insurance claims', L.insurance], ['Boats and cargo sold', L.sales], ['Dividends received', L.divIn || 0], ['Interest', -L.interest], ['Contract penalties', -(L.penalties || 0)], ['Fines', -L.fines], ['Dividends paid', -(L.divOut || 0)]];
+  const known = items.reduce((a, [, v]) => a + v, 0), other = profit - (be - bc) - known;
+  if (Math.abs(other) >= 1) items.push([other < 0 ? 'Other costs' : 'Other earnings', other]);
+  const coRows = items.filter(([, v]) => Math.abs(v) >= 1);
+  // shares: what each holding is worth now, and how that has moved since the season began
+  const M = S.mkt, ids = Object.keys(M.hold).filter(id => M.hold[id] > 0 && (EX[id] ? exListed(id) : rivalListed(id)));
+  const startPx = id => { const h = (M.h[id] || []).filter(([x]) => x < S.year); if (h.length) return h[h.length - 1][1]; const c = costOf(id); return c != null ? c / M.hold[id] : sharePrice(id); };
+  const shares = ids.map(id => { const n = M.hold[id], now = n * sharePrice(id), was = n * startPx(id); return { id, n, now, chg: now - was }; }).sort((a, b) => b.now - a.now);
+  const sv = shares.reduce((a, x) => a + x.now, 0), sc = shares.reduce((a, x) => a + x.chg, 0);
+  return `<div class="rules"><span>${esc(S.company)}</span><span>${live ? `To ${fmtDate(S.day)}` : `The ${S.year} season`}</span></div>
+  <h2>${live ? 'This season so far' : `The ${S.year} season`}</h2>
+  <dl class="kv"><dt>Earnings</dt><dd>${money(rev)}</dd><dt>Expenses</dt><dd>${money(cost)}</dd><dt>${profit < 0 ? 'Loss' : 'Profit'}</dt><dd class="${profit < 0 ? 'neg' : 'pos'}">${money(profit)}</dd></dl>
+  <h3>Your boats <span class="count">${boats.length}</span></h3>
+  ${boats.length ? `<ul class="list">${boats.map(row).join('')}</ul>
+  <dl class="kv"><dt>All your boats</dt><dd>${signed(be - bc)}</dd></dl>
+  <p class="fine">A boat's cost is her crew and fuel, her repairs and lost nets, and her share of the winter refit, insurance and licences. Tap a boat to see her.</p>` : '<p class="fine">You have no boats.</p>'}
+  ${coRows.length ? `<h3>The company</h3><dl class="kv">${coRows.map(([k, v]) => `<dt>${k}</dt><dd>${signed(v)}</dd>`).join('')}</dl>` : ''}
+  <h3>Your shares <span class="count">${shares.length}</span></h3>
+  ${shares.length ? `<ul class="list">${shares.map(x => `<li><button class="item" data-act="seasonStock" data-id="${x.id}">${EX[x.id] ? stockGlyph(EX[x.id].kind) : coGlyph(RIVAL[x.id])}<span><b>${esc(EX[x.id] ? EX[x.id].name : coName(x.id))}</b><small>${fmtN(x.n)} shares · worth ${money(x.now)}</small></span><span class="side">${signed(x.chg)}<small>this season</small></span></button></li>`).join('')}</ul>
+  <dl class="kv"><dt>Worth now</dt><dd>${money(sv)}</dd><dt>Since the season began</dt><dd>${signed(sc)}</dd></dl>
+  <p class="fine">Share prices rise and fall; a gain or loss is only money in hand when you sell. ${live ? 'Dividends are paid at the end of the season.' : ''}</p>` : '<p class="fine">You hold no shares in other companies. The stock exchange is on the company card.</p>'}
+  <div class="row"><button class="btn primary wide" data-act="closeModal">Close</button></div>`;
+}
 function ledgerRows(L) {
   const r = (k, v) => v ? `<tr><td>${k}</td><td>${money(v)}</td></tr>` : '';
   const rev = ledgerRevenue(L) + L.sales, cost = ledgerCost(L);
@@ -6373,6 +6406,9 @@ const ACTS = {
   soundSet: el => { setSound(el.dataset.v === '1'); if ($('#modalBody .slider')) showModal(menuHTML()); },
   kAccept: el => { const k = contracts().find(k => k.id === el.dataset.id); if (acceptContract(k)) toast(`Signed with ${k.cust}.`); if (el.dataset.modal) { const h = offersHTML(); if (h) showModal(h); else closeModal(); } ui.panelDirty = true; },
   history: el => openHistory(!!el.closest('#modalBody')),
+  season: () => showModal(seasonHTML()),
+  seasonBoat: el => { closeModal(); select({ t: 'tug', id: el.dataset.id }); },
+  seasonStock: el => { closeModal(); select({ t: 'stock', id: el.dataset.id }); },
   tlPick: el => tlPick(+el.dataset.i),
   tlStep: el => tlPick(tlSel + +el.dataset.v),
   kBid: el => openTender(contracts().find(k => k.id === el.dataset.id), el.dataset.modal ? 'offers' : null),
@@ -6514,6 +6550,8 @@ function toast(text, bad) {
 function migrate() {
   for (const t of S.tugs) { if (OLD_MODELS[t.model]) t.model = OLD_MODELS[t.model]; if (t.earnTotal == null) t.earnTotal = t.earn || 0; }
   if (S.contracts) S.contracts = S.contracts.filter(k => k.state !== 'tender');
+  if (S.seasonOpen == null) S.seasonOpen = S.year === 1870 ? dayOf(1870, 4, 20) : dayOf(S.year, 4, 17);
+  for (const t of S.tugs) if (t.owner === 'p' && t.cost == null) t.cost = S.season ? runCost(t) * (t.state === 'laid' ? LAID_COST : 1) * Math.max(0, S.day - Math.max(S.seasonOpen, t.bought)) : 0;
   if (!S.gameId) S.gameId = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => (b % 36).toString(36)).join('');
   for (const p of PORTS) if (!S.ports[p.id]) S.ports[p.id] = { stock: {}, glut: {}, millQ: 0, fishGlut: 0, built: {}, ice: 0 };
   if (S.premiumUntil == null) S.premiumUntil = S.premiumMult > 1 ? 1884 : 0;
