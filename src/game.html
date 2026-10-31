@@ -217,7 +217,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .item b{display:block;font-size:15px}
 .item small{display:block;color:var(--ink-2);font-size:13px;line-height:1.3}
 .item .side{font-weight:700;font-variant-numeric:tabular-nums;text-align:right;font-size:14px}
-.glyph{width:22px;height:22px;display:block}
+.glyph{width:26px;height:26px;display:block;flex-shrink:0}
 .bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;border:1px solid var(--rule)}
 .bar i{display:block;height:100%;background:var(--good)}
 .bar.warn i{background:var(--warn)} .bar.bad i{background:var(--bad)}
@@ -1167,7 +1167,7 @@ const RIVALS = [
   { id: 'bay', name: 'Bay Towing & Wrecking Co.', home: 'collingwood', from: 1870, kind: 'Towing and wrecking', color: '#a8432a', invented: true, races: true,
     desc: 'A Collingwood towing outfit, made up for the game, that runs freight routes like yours and races you for every tow.',
     fleet: [[1870, 2], [1873, 3], [1885, 4]],
-    routes: [{ stops: ['owensound', 'littlecurrent', 'killarney'] }, { from: 1873, stops: ['gateway', 'owensound'] }, { from: 1876, stops: ['collingwood', 'byng', 'parrysound'] },
+    routes: [{ stops: ['owensound', 'littlecurrent', 'killarney'] }, { from: 1873, stops: ['gateway', 'owensound'], model: 'hooker' }, { from: 1876, stops: ['collingwood', 'byng', 'parrysound'] },
       { from: 1889, stops: ['gateway', 'collingwood'] }, { from: 1900, stops: ['owensound', 'tobermory', 'littlecurrent'] }, { from: 1912, stops: ['gateway', 'mcnicoll'] }] },
   { id: 'boutell', name: 'Mitchell & Boutell', home: 'baycity', from: 1870, to: 1900, since: 1869, kind: 'Towing, rafting and wrecking', color: '#2f5d8a', races: true,
     titles: [[1870, 'Mitchell & Boutell'], [1887, 'Saginaw Bay Towing Co.']],
@@ -1178,7 +1178,7 @@ const RIVALS = [
     events: [[1887, 5, 1, 'Mitchell & Boutell have split up. Capt. Benjamin Boutell keeps the tugs and the rafting business as the Saginaw Bay Towing Co.']] },
   { id: 'gblc', name: 'Georgian Bay Lumber Co.', home: 'waubaushene', from: 1871, to: 1926, kind: 'Lumber company, towing its own logs', color: '#9a6a1c',
     desc: "Anson Dodge's company, incorporated in 1871, which bought or built most of the sawmills on the south end of the bay. The Waubaushene mill alone employed 250 men. In August 1906 one of its rafts, 80,000 logs, blocked the channel at Little Current.",
-    fleet: [[1871, 1], [1880, 2], [1912, 1]], routes: [{ stops: ['french', 'waubaushene'] }, { from: 1880, stops: ['moonriver', 'waubaushene'] }],
+    fleet: [[1871, 1], [1880, 2], [1882, 3], [1906, 2], [1912, 1]], routes: [{ stops: ['french', 'waubaushene'] }, { from: 1880, stops: ['moonriver', 'waubaushene'] }, { from: 1882, to: 1906, stops: ['waubaushene', 'gateway'], model: 'hooker' }], gator: ['moonriver', 1889],
     events: [[1906, 8, 10, 'A Georgian Bay Lumber Co. raft of 80,000 logs has blocked the channel at Little Current.']] },
   { id: 'thompson', name: 'Thompson Towing & Wrecking Co.', home: 'gateway', from: 1893, to: 1899, absorbedBy: 'gltc', kind: 'Towing and wrecking', color: '#6b4f8a', races: true, wreck: true,
     desc: 'The Boynton & Thompson tug line of Port Huron. Its tug C.D. Thompson was built at Port Huron in 1893. In 1899 it was swallowed by the new Great Lakes Towing Co.',
@@ -1202,10 +1202,10 @@ const RIVALS = [
       [1925, 4, 17, 'Midland Towing & Wrecking is now the Burke Towing & Salvage Co., run by Capts. Ed, David and Fred Burke.']] },
   { id: 'vhl', name: 'Victoria Harbour Lumber Co.', home: 'midland', from: 1901, to: 1928, since: 1886, kind: 'Lumber company, towing its own logs', color: '#5a6e2a',
     desc: "John Waldie's company, formed in 1886 by merging three mills at Victoria Harbour, next door to Midland. From 1901 its old tug Charlton, built in 1862, towed rafts from the North Channel. The mill closed in 1927.",
-    fleet: [[1901, 1]], routes: [{ stops: ['spanish', 'midland'] }], boats: [['Charlton', 0, 0, 'woodcompound']] },
+    fleet: [[1901, 1]], routes: [{ stops: ['spanish', 'midland'] }], boats: [['Charlton', 0, 0, 'woodcompound']], gator: ['spanish', 1902] },
   { id: 'beck', name: 'C. Beck Manufacturing Co.', home: 'penetang', from: 1905, to: 1930, since: 1875, kind: 'Lumber company, towing its own logs', color: '#b5652a',
     desc: "The Beck lumber company of Penetanguishene. Its tug Wahnapitae, built at Penetang in the winter of 1904–05, towed huge rafts from Little Current, Thessalon and French River across some 80 miles of open bay, until Beck's timber on the north shore ran out in 1929.",
-    fleet: [[1905, 1]], routes: [{ stops: ['french', 'penetang'] }], boats: [['Wahnapitae', 0, 0, 'steelwrecker']],
+    fleet: [[1905, 1]], routes: [{ stops: ['french', 'penetang'] }], boats: [['Wahnapitae', 0, 0, 'steelwrecker']], gator: ['french', 1906],
     leave: "Beck's timber on the north shore is cut out. The company has sold its tug Wahnapitae to Keenan Towing of Owen Sound." },
   { id: 'keenan', name: 'Keenan Towing Co.', home: 'owensound', from: 1910, to: 1937, kind: 'Towing log barges', color: '#2a6f86',
     desc: 'The towing arm of Keenan Wood Products of Owen Sound, towing barges loaded with logs. Its tug Keenan was the old Winnanna, burned at Tobermory in 1909 and rebuilt. In 1929 it bought the Wahnapitae from Beck and renamed her Dick T.',
@@ -1243,18 +1243,24 @@ function rivalsEnter(y, quiet) {
 const coName = (id, y = yearOf(S.day)) => { const c = RIVAL[id]; return !c ? 'A rival' : c.titles ? stepAt(c.titles, y) : c.name; };
 const comp = id => (S.comps[id] = S.comps[id] || { earned: 0, last: null, hist: [] });
 const rivalTugs = id => S.tugs.filter(t => t.owner === 'r' && t.co === id);
+// A wrecking firm's salvage tug (and Bay Towing & Wrecking's fourth boat) is a wooden wrecker until the steel ones come
 const rivalModel = (c, y, n) => c.fish ? (y >= 1930 ? 'dieselfish' : y >= 1909 ? 'gasfish' : y >= 1903 ? 'liftertug' : 'steamfish')
-  : y >= 1936 ? 'diesel' : c.wreck && y >= 1902 ? 'steelwrecker' : y >= 1891 ? 'steelcompound' : y >= 1879 || n ? 'woodcompound' : 'woodsimple';
+  : y >= 1936 ? 'diesel' : c.wreck && y >= 1902 ? 'steelwrecker' : y >= 1874 && ((c.wreck && n === 0) || (!c.wreck && /wrecking/i.test(c.kind) && n === 3)) ? 'woodwrecker'
+  : y >= 1891 ? 'steelcompound' : y >= 1879 || n ? 'woodcompound' : 'woodsimple';
+// a firm's boats, leaving out an alligator up some river
+const rivalFleet = id => rivalTugs(id).filter(t => !isWarp(t));
 // `extra`: a boat bought after a good season, beyond the firm's real fleet; with no run of its own free, she doubles up on one
 function addRivalTug(cid, extra) {
-  const c = RIVAL[cid], y = yearOf(S.day), fleet = rivalTugs(cid), fish = !!c.fish;
-  const model = rivalModel(c, y, fleet.length);
+  const c = RIVAL[cid], y = yearOf(S.day), fleet = rivalFleet(cid), fish = !!c.fish;
+  let model = rivalModel(c, y, fleet.length);
   let route = [], ground = null;
   if (fish) { const free = c.fish.filter(g => !fleet.some(t => t.ground === g)); ground = pick(free.length ? free : c.fish); }
   else {
     const used = new Set(fleet.map(t => t.route.join())), live = (c.routes || []).filter(r => y >= (r.from || 0) && y < (r.to || 9999));
     const opt = live.find(r => !used.has(r.stops.join()));
     if (opt) route = opt.stops.slice(); else if (extra && live.length) route = pick(live).stops.slice(); else if (!c.wreck && !(c.races && fleet.length)) return null;
+    // a run some firms worked with a lumber hooker, while hookers were built
+    if (opt && opt.model && forSale(MODELS[opt.model], y)) model = opt.model;
   }
   const taken = new Set(S.tugs.map(t => t.name).concat(S.lost || []));
   const real = (c.boats || []).find(([n, a, b]) => y >= (a || 0) && y < (b || 9999) && !taken.has(n));
@@ -1279,7 +1285,7 @@ function rivalsGrow(y) {
       addNews(`After a good season, ${coName(c.id)} has ordered another ${c.fish ? 'fish tug' : 'tug'} for the spring.`);
     } else if (x > 0 && now < avg * .88 && rand() < .5) {
       st.extra = x - 1;
-      const fleet = rivalTugs(c.id), t = fleet.filter(t => t.extra).pop() || (fleet.length > rivalWant(c, y + 1) ? fleet[fleet.length - 1] : null);
+      const fleet = rivalFleet(c.id), t = fleet.filter(t => t.extra).pop() || (fleet.length > rivalWant(c, y + 1) ? fleet[fleet.length - 1] : null);
       if (t) { S.tugs = S.tugs.filter(o => o !== t); st.cash = (st.cash || 0) + tugValue(t) * .8; addNews(`After a poor season, ${coName(c.id)} has sold the ${t.name}.`); }
     }
   }
@@ -1290,7 +1296,7 @@ function rivalsDay(day) {
   rivalsEnter(y);
   for (const c of RIVALS) {
     if (!coActive(c, y)) continue;
-    const n = rivalTugs(c.id).length, hist = stepAt(c.fleet, y) || 0;
+    const n = rivalFleet(c.id).length, hist = stepAt(c.fleet, y) || 0;
     if (n < rivalWant(c, y) && (n === 0 || (monthOf(day) >= 5 && rand() < .04))) {
       const t = addRivalTug(c.id, n >= hist);
       if (t) {
@@ -1298,6 +1304,7 @@ function rivalsDay(day) {
         if (n > 0) addNews(`${coName(c.id)} has a new ${isFish(t) ? 'fish tug' : 'tug'}, the ${t.name}, ${isFish(t) ? `fishing ${GROUND[t.ground].name}` : t.route.length ? 'working ' + t.route.map(p => PORT[p].name).join(' and ') : 'stationed at ' + PORT[c.home].name}.`);
       }
     }
+    if (c.gator && y >= c.gator[1] && y <= MODELS.alligator.to && S.season && !rivalTugs(c.id).some(isWarp) && !comp(c.id).gator) rivalGator(c);
     for (const [ey, em, ed, text, boat] of c.events || []) {
       const key = `co:${c.id}:${ey}:${em}`; if (S.fired[key] || day < dayOf(ey, em, ed)) continue;
       S.fired[key] = true; addNews(text, { bad: !!boat });
@@ -1315,6 +1322,13 @@ function rivalsDay(day) {
     if (opt) { t.route = opt.stops.slice(); t.ri = 0; } else if (c.wreck) { t.route = []; } else S.tugs = S.tugs.filter(x => x !== t);
   }
 }
+// A lumber company's alligator, on the river its logs come down
+function rivalGator(c) {
+  const pid = c.gator[0]; if (!PORT[pid] || !portOpen(pid)) return;
+  const t = addTug('alligator', 'r', pid, newName('r')); t.co = c.id; t.station = null; t.river = pid; warpPlace(t, pid); t.state = 'warp'; t.warpReady = S.day + 4;
+  comp(c.id).gator = Math.floor(S.day);
+  addNews(`${coName(c.id)} has an alligator, the ${t.name}, warping its log booms down ${riverWhere(pid)}.`);
+}
 // Each spring: firms that have closed sell up or pass their boats on; worn-out boats go to the breakers
 function rivalsSpring(y) {
   rivalsEnter(y);
@@ -1331,6 +1345,9 @@ function rivalsSpring(y) {
     }
   }
   for (const t of S.tugs.filter(t => t.owner === 'r' && ageOf(t) > 40)) { S.tugs = S.tugs.filter(x => x !== t); addNews(`${coName(t.co)} has sent the old ${t.name} to the breakers.`); }
+  for (const t of S.tugs) if (t.owner === 'r' && MODELS[t.model].refitTo && y >= MODELS[MODELS[t.model].refitTo].year && rand() < .35) {
+    t.model = MODELS[t.model].refitTo; t.price += REFIT_COST * .8; addNews(`${coName(t.co)}'s ${t.name} has been given a compound engine over the winter.`);
+  }
 }
 
 /* =====================================================================
@@ -1824,7 +1841,7 @@ const warpPlace = (t, pid) => { const [x, y, hd] = warpSpot(pid); t.x = x; t.y =
 const riverWhere = pid => { const r = WARP_RIVERS[pid] || 'the river', n = PORT[pid].name; return r.includes(n) ? r : `${r} above ${n}`; };
 function warpDay(day) {
   for (const t of S.tugs) {
-    if (!isWarp(t) || t.owner !== 'p' || !S.season || t.state === 'laid') continue;
+    if (!isWarp(t) || !S.season || t.state === 'laid' || (t.owner === 'r' && !(RIVAL[t.co] && coActive(RIVAL[t.co], yearOf(day))))) continue;
     if (t.warpReady && day < t.warpReady) continue;
     t.warpReady = null;
     t.warpN = (t.warpN || 0) + 1;
@@ -2102,7 +2119,7 @@ const kKind = k => k.c === 'fish' ? 'fish' : 'tow';
 function tenderRivals(k, except) {
   const y = yearOf(S.day), fish = k.c === 'fish', at = k.from || k.to, mkt = Math.max(kMarket(k), k.ceil * .7);
   return RIVALS.filter(c => c.id !== except && coActive(c, y) && !!c.fish === fish && (!/^Lumber company/.test(c.kind) || k.c === 'logs')).map(c => {
-    const boats = rivalTugs(c.id).filter(t => isFish(t) === fish); if (!boats.length) return null;
+    const boats = rivalFleet(c.id).filter(t => isFish(t) === fish); if (!boats.length) return null;
     const ports = [...new Set([c.home, ...boats.flatMap(t => t.route.concat(t.home ? [t.home] : []))])].filter(p => PORT[p]);
     if (Math.min(...ports.map(p => p === at ? 0 : distKm(p, at))) > 220) return null;
     const held = rivalContracts(c.id).length; if (held >= 1 + Math.floor(boats.length / 3)) return null;
@@ -2184,7 +2201,7 @@ let TENDER = null;
 function rivalTenderDay(day) {
   const mo = monthOf(day), y = yearOf(day);
   if (!S.season || mo < 5 || mo > 9 || (TENDER && !TENDER.done) || rand() > .022) return;
-  const firms = RIVALS.filter(c => coActive(c, y) && !/^Lumber company/.test(c.kind) && rivalTugs(c.id).some(t => isFish(t) === !!c.fish) && rivalContracts(c.id).length < 1 + Math.floor(rivalTugs(c.id).length / 3));
+  const firms = RIVALS.filter(c => coActive(c, y) && !/^Lumber company/.test(c.kind) && rivalFleet(c.id).some(t => isFish(t) === !!c.fish) && rivalContracts(c.id).length < 1 + Math.floor(rivalFleet(c.id).length / 3));
   if (!firms.length) return;
   const c = pick(firms), k = rivalOffer(c); if (!k) return;
   const mine = S.tugs.filter(t => t.owner === 'p' && kKind(k) === (isFish(t) ? 'fish' : 'tow'));
@@ -2198,7 +2215,7 @@ function rivalTenderDay(day) {
 }
 // A contract a rival goes for: a run from its own waters, sized to its fleet
 function rivalOffer(c) {
-  const y = yearOf(S.day), fish = !!c.fish, boats = rivalTugs(c.id).filter(t => isFish(t) === fish);
+  const y = yearOf(S.day), fish = !!c.fish, boats = rivalFleet(c.id).filter(t => isFish(t) === fish);
   const taken = new Set(contracts().filter(k => k.state !== 'done').map(k => k.c + k.from + k.to));
   const ports = [...new Set([c.home, ...boats.flatMap(t => t.route.concat(t.home ? [t.home] : []))])].filter(p => PORT[p] && portOpen(p));
   const days = Math.max(40, S.seasonClose - S.day), short = rand() < .5, span = short ? 60 : days, id = 'k' + (S.nextId++);
@@ -4786,14 +4803,27 @@ function statusOf(t) {
   const tw = towWords(t);
   return `Bound for ${goalName(t.goal)}${tw ? ' with ' + tw : ', running light'}.`;
 }
+// A small side view of each kind of boat for the lists, bow to the right, in her owner's colour
+const GLYPHS = {
+  woodsimple: (c, bd) => `<path d="M4 14h14l-2 3H6z" fill="${c}"/><rect x="7" y="10" width="6" height="4" fill="${c}"/><rect x="9.6" y="3" width="1.4" height="7" fill="${bd}"/>`,
+  woodrefit: (c, bd) => `<path d="M4 14h14l-2 3H6z" fill="${c}"/><rect x="6" y="10" width="7" height="4" fill="${c}"/><rect x="13" y="8" width="3" height="6" fill="${c}"/><rect x="8.6" y="4" width="2.6" height="6" fill="${c}"/><rect x="8.6" y="5.2" width="2.6" height="1.3" fill="${bd}"/>`,
+  woodcompound: (c, bd) => `<path d="M1 14h19l-3 3H3z" fill="${c}"/><rect x="5" y="10" width="10" height="4" fill="${c}"/><rect x="12" y="7" width="3.5" height="3" fill="${c}"/><rect x="8" y="4" width="2.6" height="6" fill="${c}"/><rect x="8" y="5" width="2.6" height="1.3" fill="${bd}"/><path d="M2 12q1.5 -2 3 0" fill="none" stroke="${c}" stroke-width="1"/>`,
+  steelcompound: (c, bd) => `<path d="M1 13h20l-2 4H2z" fill="${c}"/><path d="M2.5 15h17" stroke="var(--surface)" stroke-width=".6" stroke-dasharray=".8 1.4"/><rect x="5" y="9" width="10" height="4" fill="${c}"/><rect x="11.5" y="6" width="4" height="3" fill="${c}"/><path d="M8 9l.8 -6h2.4l-.8 6z" fill="${c}"/><path d="M8.5 5.2h2.4" stroke="${bd}" stroke-width="1.2"/>`,
+  woodwrecker: (c, bd) => `<path d="M2 14h17l-2 3H4z" fill="${c}"/><rect x="4" y="10" width="8" height="4" fill="${c}"/><rect x="6.5" y="4" width="2.2" height="6" fill="${c}"/><rect x="6.5" y="5" width="2.2" height="1.2" fill="${bd}"/><path d="M13.5 14V5M13.5 7l6 -3M19.5 4v5" fill="none" stroke="${c}" stroke-width="1.2"/>`,
+  steelwrecker: (c, bd) => `<path d="M1 13h20l-2 4H2z" fill="${c}"/><path d="M2.5 15h17" stroke="var(--surface)" stroke-width=".6" stroke-dasharray=".8 1.4"/><rect x="3" y="9" width="9" height="4" fill="${c}"/><rect x="8" y="6" width="4" height="3" fill="${c}"/><rect x="5" y="3" width="2.4" height="6" fill="${c}"/><rect x="5" y="4" width="2.4" height="1.2" fill="${bd}"/><path d="M14 13V3M14 5l6.5 -2.5M20.5 2.5v6" fill="none" stroke="${c}" stroke-width="1.3"/>`,
+  diesel: (c, bd) => `<path d="M2 14h18l-3 3H4z" fill="${c}"/><rect x="5" y="10" width="11" height="4" fill="${c}"/><rect x="11" y="6.5" width="5" height="3.5" fill="${c}"/><rect x="7" y="7.5" width="3" height="2.5" fill="${c}"/><rect x="7" y="8.2" width="3" height=".9" fill="${bd}"/>`,
+  hooker: (c, bd) => `<path d="M1 14h20l-2 3H2z" fill="${c}"/><rect x="6" y="10" width="11" height="4" fill="var(--c-lumber)"/><path d="M6 12h11" stroke="${c}" stroke-width=".5" opacity=".5"/><rect x="2" y="9" width="3.4" height="5" fill="${c}"/><rect x="18" y="10" width="2" height="4" fill="${c}"/><rect x="3" y="4.5" width="1.6" height="4.5" fill="${bd}"/>`,
+  alligator: (c, bd) => `<path d="M3 13h15l2 -2v3l-2 2H4z" fill="${c}"/><circle cx="11" cy="13.5" r="3.6" fill="none" stroke="${c}" stroke-width="1.3"/><path d="M7.5 13.5h7M11 10v7" stroke="${c}" stroke-width=".8"/><rect x="5" y="8.5" width="8" height="4" fill="${c}"/><rect x="8" y="4" width="1.5" height="4.5" fill="${bd}"/><path d="M20 12l2 0" stroke="${c}" stroke-width="1"/>`,
+  skiff: c => `<path d="M3 15h16l-3 3H6z" fill="${c}"/><path d="M9 14V2L3 14zM12 14V5l5 9z" fill="${c}"/>`,
+  steamfish: (c, bd) => `<path d="M3 14h15l-3 3H5z" fill="${c}"/><path d="M3.5 14v-1.5h1.5" fill="none" stroke="${c}" stroke-width="1"/><rect x="11" y="9.5" width="5" height="4.5" fill="${c}"/><rect x="8" y="5" width="1.6" height="9" fill="${bd}"/>`,
+  liftertug: (c, bd) => `<path d="M3 15v-3q0 -4 5 -4h7q4 0 4 4v3z" fill="${c}"/><path d="M3 15h16l-2 2H5z" fill="${c}"/><rect x="13" y="6" width="3.5" height="2.5" fill="${c}"/><rect x="8" y="3.5" width="1.6" height="5" fill="${bd}"/>`,
+  gasfish: c => `<path d="M3 15v-2.5q0 -3.5 5 -3.5h7q4 0 4 3.5v2.5z" fill="${c}"/><path d="M3 15h16l-2 2H5z" fill="${c}"/><rect x="13" y="7" width="3.5" height="2.2" fill="${c}"/><path d="M8 9V5.5" stroke="${c}" stroke-width=".9"/>`,
+  dieselfish: c => `<path d="M3 15v-3q0 -4 5 -4h7q4 0 4 4v3z" fill="${c}"/><path d="M3 15h16l-2 2H5z" fill="${c}"/><path d="M4 13.5h14" stroke="var(--surface)" stroke-width=".6" stroke-dasharray=".8 1.4"/><rect x="4" y="5" width="4.5" height="3" fill="${c}"/>`,
+};
 function tugGlyph(t) {
-  const col = t.owner === 'p' ? 'var(--player)' : (RIVAL[t.co] && RIVAL[t.co].color) || 'var(--rival)';
-  if (MODELS[t.model].sail) return `<svg class="glyph" viewBox="0 0 22 22"><path d="M3 15h16l-3 3H6z" fill="${col}"/><path d="M9 14V2L3 14zM12 14V5l5 9z" fill="${col}"/></svg>`;
-  if (MODELS[t.model].hooker) return `<svg class="glyph" viewBox="0 0 22 22"><path d="M1 14h20l-2 3H2z" fill="${col}"/><rect x="6" y="10" width="11" height="4" fill="var(--c-lumber)"/><rect x="2" y="9" width="3" height="5" fill="${col}"/><rect x="3" y="5" width="1.6" height="4" fill="${t.owner === 'p' ? 'var(--magenta)' : col}"/></svg>`;
-  if (MODELS[t.model].warp) return `<svg class="glyph" viewBox="0 0 22 22"><path d="M4 13h14v3H4z" fill="${col}"/><circle cx="11" cy="13" r="3.4" fill="none" stroke="${col}" stroke-width="1.4"/><rect x="6" y="9" width="7" height="4" fill="${col}"/><rect x="9" y="5" width="1.6" height="4" fill="${col}"/><path d="M18 14l3 0" stroke="${col}" stroke-width="1"/></svg>`;
-  return isFish(t)
-    ? `<svg class="glyph" viewBox="0 0 22 22"><path d="M3 13h15l-3 4H5z" fill="${col}"/><rect x="6" y="8" width="8" height="5" fill="${col}"/><rect x="8" y="4" width="2" height="4" fill="${col}"/></svg>`
-    : `<svg class="glyph" viewBox="0 0 22 22"><path d="M2 13h18l-3 4H4z" fill="${col}"/><rect x="5" y="9" width="7" height="4" fill="${col}"/><rect x="13" y="5" width="3" height="8" fill="${t.owner === 'p' ? 'var(--magenta)' : col}"/></svg>`;
+  const col = t.owner === 'p' ? 'var(--player)' : (RIVAL[t.co] && RIVAL[t.co].color) || 'var(--rival)', band = t.owner === 'p' ? 'var(--magenta)' : col;
+  const g = GLYPHS[t.model] || (isFish(t) ? GLYPHS.steamfish : GLYPHS.woodcompound);
+  return `<svg class="glyph" viewBox="0 0 22 22" aria-hidden="true">${g(col, band)}</svg>`;
 }
 function jobGlyph(j) {
   const col = `var(--${j.kind === 'salvage' ? 'bad' : 'ink'})`;
