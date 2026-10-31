@@ -120,6 +120,7 @@ h3 .count{font-family:var(--font-ui);font-size:12px;color:var(--ink-2);font-weig
 .item .side small{font-weight:700}
 .kv dt{color:var(--ink-2);font-size:13.5px}
 .kv dd{margin:0;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.kv dd .ddsub{display:block;font-weight:400;font-size:12.5px;color:var(--ink-2)}
 .pos{color:var(--money)} .neg{color:var(--bad)}
 .row{display:flex;gap:8px;flex-wrap:wrap}
 .btn{min-height:44px;padding:0 14px;border:1px solid var(--ink);border-radius:4px;background:var(--surface);font-weight:700;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
@@ -1479,7 +1480,7 @@ function absorbRival(id, paid) {
   const c = RIVAL[id], st = comp(id), y = yearOf(S.day), fleet = rivalTugs(id), M = S.mkt;
   const names = new Set(S.tugs.filter(t => t.owner === 'p').map(t => t.name.toLowerCase()));
   for (const t of fleet) {
-    t.owner = 'p'; t.co = null; t.station = null; t.stance = 'cautious'; t.job = null;
+    t.owner = 'p'; t.co = null; t.station = null; t.stance = 'cautious'; t.job = null; t.earn = 0; t.earnTotal = 0; t.joined = S.day;
     let nm = t.name, k = 2; while (names.has(nm.toLowerCase())) nm = `${t.name} ${['', '', 'II', 'III', 'IV', 'V'][k++] || k}`; t.name = nm; names.add(nm.toLowerCase());
     if (!isFish(t) && (t.route.length < 2 || routeUSClash(t.route))) t.route = [];
   }
@@ -4857,7 +4858,7 @@ function tugHTML(t) {
     return `${head(esc(coName(t.co)), esc(t.name))}<p class="status">${esc(statusOf(t))}</p>
     ${planThumb('boat', t.model, 'the ' + t.name)}
     <p class="fine">${m.name}, built ${yearOf(t.bought)}. ${work}</p>
-    <dl class="kv"><dt>Earned this season</dt><dd>${money(t.earn)}</dd></dl>
+    <dl class="kv">${earnedHTML(t)}</dl>
     <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details>
     <button class="btn ghost" data-act="select" data-t="co" data-id="${t.co}">About ${esc(coName(t.co))}</button>`;
   }
@@ -4882,7 +4883,7 @@ function tugHTML(t) {
   return `${head(m.name, esc(t.name))}
   <p class="status">${esc(statusOf(t))}</p>
   ${planThumb('boat', t.model, 'the ' + t.name)}
-  <dl class="kv"><dt>Hull</dt><dd>${hullBar(t.hull)}</dd><dt>Earned this season</dt><dd class="pos">${money(t.earn)}</dd><dt>Built</dt><dd>${yearOf(t.bought)}${ageOf(t) >= 1 ? `, ${Math.floor(ageOf(t))} years old` : ''}</dd><dt>Running cost</dt><dd>${t.state === 'laid' && S.season ? `${money(runCost(t) * LAID_COST)} a day, laid up` : `${money(runCost(t))} a day`}</dd><dt>Speed</dt><dd>${m.kn} knots${m.raftKn ? `, ${m.raftKn} with a raft` : m.sail ? ' in a breeze' : ''}</dd></dl>
+  <dl class="kv"><dt>Hull</dt><dd>${hullBar(t.hull)}</dd>${earnedHTML(t)}<dt>Built</dt><dd>${yearOf(t.bought)}${ageOf(t) >= 1 ? `, ${Math.floor(ageOf(t))} years old` : ''}</dd><dt>Running cost</dt><dd>${t.state === 'laid' && S.season ? `${money(runCost(t) * LAID_COST)} a day, laid up` : `${money(runCost(t))} a day`}</dd><dt>Speed</dt><dd>${m.kn} knots${m.raftKn ? `, ${m.raftKn} with a raft` : m.sail ? ' in a breeze' : ''}</dd></dl>
   ${ageOf(t) >= 25 ? '<p class="fine">She is getting old: she burns more coal and suffers more in a gale every year. Think about replacing her.</p>' : ''}
   <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details>
   ${towing}
@@ -4907,6 +4908,11 @@ function renameTug(t, name) {
   if (S.tugs.some(x => x !== t && x.owner === 'p' && x.name.toLowerCase() === name.toLowerCase())) return `You already have a boat called ${name}.`;
   addNews(`The ${t.name} has been renamed the ${name}.`); t.name = name; ui.panelDirty = true;
   return null;
+}
+// What a boat has earned: this season (in the winter, the season just past), and in all since she joined the fleet
+function earnedHTML(t) {
+  const since = yearOf(t.joined != null ? t.joined : t.bought), all = t.earnTotal || 0;
+  return `<dt>Earned</dt><dd class="pos">${money(t.earn)} ${S.season ? 'this season' : `in ${S.year}`}${since < S.year && all > t.earn ? `<small class="ddsub">${money(all)} in all since ${since}</small>` : ''}</dd>`;
 }
 const uninsured = () => S.day > dayOf(yearOf(S.day), 11, 30);
 function layupHTML(t) {
@@ -5813,7 +5819,7 @@ function toast(text, bad) {
   setTimeout(() => el.remove(), 4200);
 }
 function migrate() {
-  for (const t of S.tugs) if (OLD_MODELS[t.model]) t.model = OLD_MODELS[t.model];
+  for (const t of S.tugs) { if (OLD_MODELS[t.model]) t.model = OLD_MODELS[t.model]; if (t.earnTotal == null) t.earnTotal = t.earn || 0; }
   for (const p of PORTS) if (!S.ports[p.id]) S.ports[p.id] = { stock: {}, glut: {}, millQ: 0, fishGlut: 0, built: {}, ice: 0 };
   if (S.premiumUntil == null) S.premiumUntil = S.premiumMult > 1 ? 1884 : 0;
   if (S.rank == null) S.rank = rankIdx(netWorth());
