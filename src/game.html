@@ -238,6 +238,19 @@ table.cargo td.n{text-align:right}
 .stops li::before{content:counter(s);width:22px;height:22px;border-radius:50%;border:1.5px solid var(--magenta);color:var(--magenta);display:grid;place-items:center;font-size:12px}
 .stops li.next::after{content:"next";font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
 .confirm{border:1px solid var(--bad);border-radius:4px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.bids{list-style:none;margin:0;padding:0}
+.bids li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:15px}
+.bids li span{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bids li.out b,.bids li.out span{font-weight:400;color:var(--ink-2)}
+.bids li.you b{color:var(--magenta)}
+.bids li.none{color:var(--ink-2);font-size:14px}
+.stepper{display:grid;grid-template-columns:56px 1fr 56px;align-items:center;border:1px solid var(--rule);border-radius:4px;overflow:hidden;background:var(--surface)}
+.stepper button{height:50px;font-size:26px;line-height:1;background:var(--surface-2);border:0;cursor:pointer;color:var(--ink);font-family:var(--font-ui)}
+.stepper button:disabled{color:var(--rule);cursor:default}
+.stepper output{text-align:center;font-weight:800;font-size:19px;font-variant-numeric:tabular-nums}
+.verdict{border:1px solid var(--rule);border-radius:4px;padding:10px 12px;background:var(--surface-2);display:flex;flex-direction:column;gap:4px}
+.verdict.win{border-color:var(--good)}
+.verdict b{font-size:16px}
 .news{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .news li{font-size:13.5px;line-height:1.35}
 .news time{display:block;font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);font-weight:700}
@@ -1813,7 +1826,10 @@ function credit(t, v, kind, pid) {
 
 /* ---------- contracts: so many loads a season, from one port to another, at a fixed price ---------- */
 const contracts = () => S.contracts || (S.contracts = []);
-const activeContracts = () => contracts().filter(k => k.state === 'active');
+// a contract is yours unless a rival won it (k.by is the rival's id)
+const mineK = k => !k.by || k.by === 'p';
+const activeContracts = () => contracts().filter(k => k.state === 'active' && mineK(k));
+const rivalContracts = id => contracts().filter(k => k.state === 'active' && !mineK(k) && (!id || k.by === id));
 const offeredContracts = () => contracts().filter(k => k.state === 'offer');
 const contractCap = () => Math.min(6, 2 + Math.floor(S.tugs.filter(t => t.owner === 'p').length / 3));
 const needOf = k => Math.max(0, k.n - k.done);
@@ -1827,7 +1843,7 @@ function valueAt(t, pid, c, from) {
 }
 const qtyText = (k, n = k.n) => k.c === 'fish' ? `${Math.round(n)} ton${Math.round(n) === 1 ? '' : 's'} of fish` : `${Math.round(n)} load${Math.round(n) === 1 ? '' : 's'} of ${cargoName(k.c).toLowerCase()}`;
 const runText = k => k.from ? `${PORT[k.from].name} to ${PORT[k.to].name}` : `landed at ${PORT[k.to].name}`;
-const dueText = k => k.due ? `by ${fmtDate(k.due)}` : 'by the end of the season';
+const dueText = k => k.due ? `by ${fmtDate(k.due)}` : k.short ? `within ${k.span} days of signing` : 'by the end of the season';
 function railOwnerAt(pid, y) { const node = PORT_NODE[pid], sg = node && RAIL_SEGS.find(s => (s.a === node || s.b === node) && segOn(s, y)); return sg ? COMPANIES[lineOwner(sg.line, y)].name : null; }
 function contractCustomer(c, to, y) {
   const name = PORT[to].name;
@@ -1882,11 +1898,11 @@ function makeOffer(o = {}) {
   contracts().push(k);
   return k;
 }
-function acceptContract(k) {
+function acceptContract(k, won) {
   if (!k || k.state !== 'offer') return false;
-  if (activeContracts().length >= contractCap()) { toast(`You can manage ${contractCap()} contracts at once. More boats, more contracts.`, true); return false; }
+  if (!won && activeContracts().length >= contractCap()) { toast(`You can manage ${contractCap()} contracts at once. More boats, more contracts.`, true); return false; }
   k.state = 'active'; k.accepted = Math.floor(S.day); k.due = k.short ? Math.floor(S.day) + k.span : null;
-  addNews(`${S.company} has signed with ${k.cust}: ${qtyText(k)} ${k.from ? 'from ' + runText(k) : runText(k)}, ${dueText(k)}${k.years > 1 ? `, for ${k.years} seasons` : ''}.`);
+  addNews(`${S.company} has signed with ${k.cust}: ${qtyText(k)} ${k.from ? 'from ' + runText(k) : runText(k)}, ${dueText(k)}${k.years > 1 ? `, for ${k.years} seasons` : ''}${won ? `, at ${fmtPx(k.rate)} a ${unit(k)}` : ''}.`);
   ui.panelDirty = true; return true;
 }
 function declineContract(k) { if (k && k.state === 'offer') { S.contracts = contracts().filter(x => x !== k); ui.panelDirty = true; } }
@@ -1897,6 +1913,11 @@ function contractProgress(k, m) {
 // At the deadline: a filled contract adds to your good name; one that falls short costs you the penalty on every missing load
 function settleContract(k) {
   const short = needOf(k);
+  if (!mineK(k)) {
+    if (short > k.n * .1 && RIVAL[k.by] && coActive(RIVAL[k.by], yearOf(S.day))) addNews(`${coName(k.by)} fell ${qtyText(k, short)} short on its contract with ${k.cust}.`);
+    if (!k.short && k.left > 1) { k.left--; k.done = 0; k.filled = null; } else k.state = 'done';
+    return;
+  }
   if (short > 0) {
     const p = Math.round(short * k.pen); S.cash -= p; S.ledger.penalties = (S.ledger.penalties || 0) + p; S.rep = (S.rep || 0) - 1; S.kShort = (S.kShort || 0) + 1;
     addNews(`You fell ${qtyText(k, short)} short on your contract with ${k.cust}, and pay ${money(p)} under it.`, { bad: true });
@@ -1905,25 +1926,162 @@ function settleContract(k) {
 }
 function contractsDay(day) {
   for (const k of contracts()) {
-    if (k.state === 'offer' && day > k.expires) { k.state = 'done'; addNews(`${k.cust[0].toUpperCase() + k.cust.slice(1)} found another tug company.`); }
+    if (k.state === 'offer' && day > k.expires) { if (!tenderAmongRivals(k)) { k.state = 'done'; addNews(`${ucf(k.cust)} found another tug company.`); } }
+    if (k.state === 'active' && !mineK(k)) rivalWorks(k, day);
     if (k.state === 'active' && k.due && day > k.due) settleContract(k);
   }
+  rivalTenderDay(day);
   S.contracts = contracts().filter(k => k.state !== 'done');
   const mo = monthOf(day);
   if (S.season && mo >= 5 && mo <= 9 && offeredContracts().length < 2 && activeContracts().length < contractCap() && rand() < .012) {
     const k = makeOffer({ short: true });
-    if (k) { toast(`A contract offer from ${k.cust}`); addNews(`${k.cust[0].toUpperCase() + k.cust.slice(1)} want ${qtyText(k)} from ${runText(k)} within two months, at ${money(k.rate)} a ${k.c === 'fish' ? 'ton' : 'load'}.`); }
+    if (k) { toast(`A contract offer from ${k.cust}`); addNews(`${k.cust[0].toUpperCase() + k.cust.slice(1)} want ${qtyText(k)} from ${runText(k)} within two months, at ${fmtPx(k.rate)} a ${k.c === 'fish' ? 'ton' : 'load'}.`); }
   }
 }
 function contractsSeasonEnd() {
-  for (const k of activeContracts()) settleContract(k);
+  for (const k of contracts().filter(k => k.state === 'active')) settleContract(k);
   for (const k of offeredContracts()) k.state = 'done';
   S.contracts = contracts().filter(k => k.state !== 'done');
 }
 function contractsSpring() {
+  for (const k of rivalContracts()) k.rStart = S.day;
   const n = S.tugs.some(t => t.owner === 'p') ? (rand() < .5 ? 2 : 1) : 0;
   for (let i = 0; i < n && activeContracts().length + offeredContracts().length < contractCap() + 1; i++) makeOffer();
   if (offeredContracts().length) queueModal(() => offersHTML() || '<h2>No offers</h2><div class="row"><button class="btn wide" data-act="closeModal">Carry on</button></div>');
+}
+
+/* ---------- tenders: whoever goes for a contract, the other companies can bid lower or drop out ----------
+   The customer names the most it will pay a load. Bids go down a step at a time; the lowest bid standing when the
+   others have dropped out gets the contract. A rival bids as long as the price stays above what the run is worth to
+   it: about what the market pays, a little less from its home port, a little more when it already has contracts. */
+const RIVAL_K_MARGIN = .35;          // what a rival's contract adds to its revenue, as a share of the price of each load
+const niceStep = v => [.25, .5, 1, 2, 5, 10].find(x => x >= v * .8) || 10;
+const roundBid = v => Math.round(v * 100) / 100;
+const kKind = k => k.c === 'fish' ? 'fish' : 'tow';
+// The firms that could bid for a contract: the right kind of boats, working near the run, with room for another contract
+function tenderRivals(k, except) {
+  const y = yearOf(S.day), fish = k.c === 'fish', at = k.from || k.to, mkt = Math.max(kMarket(k), k.ceil * .7);
+  return RIVALS.filter(c => c.id !== except && coActive(c, y) && !!c.fish === fish && (!/^Lumber company/.test(c.kind) || k.c === 'logs')).map(c => {
+    const boats = rivalTugs(c.id).filter(t => isFish(t) === fish); if (!boats.length) return null;
+    const ports = [...new Set([c.home, ...boats.flatMap(t => t.route.concat(t.home ? [t.home] : []))])].filter(p => PORT[p]);
+    if (Math.min(...ports.map(p => p === at ? 0 : distKm(p, at))) > 220) return null;
+    const held = rivalContracts(c.id).length; if (held >= 1 + Math.floor(boats.length / 3)) return null;
+    const busy = rand() < .2, f = .96 + rand() * .16 - (c.home === k.from || c.home === k.to ? .04 : 0) + held * .04 - Math.min(.04, boats.length * .01);
+    return { id: c.id, floor: busy ? Infinity : mkt * f, out: false, busy };
+  }).filter(Boolean);
+}
+function newTender(k, opener) {
+  k.ceil = k.ceil || k.rate;
+  const T = { k, step: niceStep(k.ceil * .03), rate: k.ceil, lead: null, log: [], youIn: true, youBid: false, opener, done: false, rivals: tenderRivals(k, opener === 'p' ? null : opener) };
+  if (opener !== 'p') {
+    const o = { id: opener, floor: Math.max(kMarket(k), k.ceil * .7) * (.94 + rand() * .1), out: false };
+    T.rivals.unshift(o);
+    let n = Math.floor(rand() * 3); while (n > 0 && k.ceil - T.step * n < o.floor) n--;
+    T.rate = roundBid(k.ceil - T.step * n); T.lead = opener; T.log.push({ who: opener, rate: T.rate });
+    rivalsPass(T, true);
+  }
+  T.my = T.lead ? roundBid(T.rate - T.step) : k.ceil;
+  return T;
+}
+// One pass round the table: each firm still in either goes a step (now and then two) below the lowest bid, or drops out
+function rivalsPass(T, quietDrop) {
+  let bid = false;
+  for (const r of T.rivals) {
+    if (r.out || T.lead === r.id) continue;
+    const jump = rand() < .2 ? 2 : 1, next = roundBid(T.rate - T.step * jump), one = roundBid(T.rate - T.step);
+    const to = next >= r.floor ? next : one >= r.floor ? one : null;
+    if (to != null && to > 0) { T.rate = to; T.lead = r.id; T.log.push({ who: r.id, rate: to }); bid = true; }
+    else { r.out = true; if (!quietDrop || !r.busy) T.log.push({ who: r.id, out: true, busy: r.busy }); }
+  }
+  return bid;
+}
+// After you bid: the others answer. You win when they have all dropped out.
+function tenderBid(T, rate) {
+  rate = roundBid(rate);
+  if (T.done || rate <= 0 || rate > (T.lead ? T.rate - T.step * .5 : T.k.ceil)) return;
+  T.rate = rate; T.lead = 'p'; T.youBid = true; T.log.push({ who: 'p', rate });
+  rivalsPass(T);
+  if (T.lead === 'p') awardTender(T);
+  else T.my = roundBid(T.rate - T.step);
+}
+// You drop out (or never bid): the others settle it among themselves
+function tenderPass(T) {
+  T.youIn = false;
+  if (!T.youBid && T.opener === 'p') { T.done = true; T.dropped = true; return; } // only looked: the offer stands
+  T.log.push({ who: 'p', out: true });
+  for (let i = 0; i < 40 && rivalsPass(T); i++);
+  awardTender(T);
+}
+function awardTender(T) {
+  const k = T.k; T.done = true;
+  if (!T.lead) { k.state = 'done'; return; }
+  k.rate = T.rate; k.pen = Math.round(k.rate * .45);
+  if (T.lead === 'p') { k.state = 'offer'; k.by = null; acceptContract(k, true); T.won = true; }
+  else {
+    Object.assign(k, { by: T.lead, state: 'active', accepted: Math.floor(S.day), rStart: S.day, pace: .9 + rand() * .18 });
+    k.due = k.short ? Math.floor(S.day) + k.span : null;
+    addNews(`${coName(T.lead)} has won the contract with ${k.cust}: ${qtyText(k)} ${k.from ? 'from ' + runText(k) : runText(k)}, at ${fmtPx(k.rate)} a ${unit(k)}.`);
+  }
+  ui.panelDirty = true;
+}
+// An offer you let lapse: the customer goes to the other firms instead
+function tenderAmongRivals(k) {
+  const T = newTender(k, 'p'); T.youIn = false; T.youBid = true;
+  for (let i = 0; i < 40 && rivalsPass(T); i++);
+  if (!T.lead) return false;
+  awardTender(T); return true;
+}
+// A rival's contract: its boats carry the loads through the season, near enough on time
+function rivalWorks(k, day) {
+  if (!RIVAL[k.by] || !coActive(RIVAL[k.by], yearOf(day))) { k.state = 'done'; return; }
+  if (!S.season || needOf(k) <= 0) return;
+  const end = k.due || S.seasonClose, span = Math.max(15, end - (k.rStart || k.accepted || day));
+  const m = Math.min(needOf(k), k.n / span * (k.pace || 1));
+  k.done += m; comp(k.by).earned += m * k.rate * RIVAL_K_MARGIN;
+}
+// Now and then a rival goes after a contract of its own. If you have boats for it, you hear of it and can bid against them.
+let TENDER = null;
+function rivalTenderDay(day) {
+  const mo = monthOf(day), y = yearOf(day);
+  if (!S.season || mo < 5 || mo > 9 || (TENDER && !TENDER.done) || rand() > .022) return;
+  const firms = RIVALS.filter(c => coActive(c, y) && !/^Lumber company/.test(c.kind) && rivalTugs(c.id).some(t => isFish(t) === !!c.fish) && rivalContracts(c.id).length < 1 + Math.floor(rivalTugs(c.id).length / 3));
+  if (!firms.length) return;
+  const c = pick(firms), k = rivalOffer(c); if (!k) return;
+  const mine = S.tugs.filter(t => t.owner === 'p' && kKind(k) === (isFish(t) ? 'fish' : 'tow'));
+  const T = newTender(k, c.id);
+  if (!mine.length || activeContracts().length >= contractCap()) {
+    T.youIn = false; for (let i = 0; i < 40 && rivalsPass(T); i++); awardTender(T); return;
+  }
+  k.state = 'tender'; TENDER = T; T.from = 'rival';
+  toast(`${coName(T.lead)} is bidding for a contract. You can bid against them.`);
+  queueModal(() => tenderHTML() || '<h2>The tender has closed</h2><div class="row"><button class="btn wide" data-act="closeModal">Carry on</button></div>');
+}
+// A contract a rival goes for: a run from its own waters, sized to its fleet
+function rivalOffer(c) {
+  const y = yearOf(S.day), fish = !!c.fish, boats = rivalTugs(c.id).filter(t => isFish(t) === fish);
+  const taken = new Set(contracts().filter(k => k.state !== 'done').map(k => k.c + k.from + k.to));
+  const ports = [...new Set([c.home, ...boats.flatMap(t => t.route.concat(t.home ? [t.home] : []))])].filter(p => PORT[p] && portOpen(p));
+  const days = Math.max(40, S.seasonClose - S.day), short = rand() < .5, span = short ? 60 : days, id = 'k' + (S.nextId++);
+  let k;
+  if (fish) {
+    const to = pick(ports.filter(p => fishMarket(p) && !taken.has('fish' + null + p))); if (!to) return null;
+    const hold = boats.reduce((a, t) => a + MODELS[t.model].hold, 0), gid = (boats.find(t => t.ground) || {}).ground || 'christian';
+    k = { id, c: 'fish', from: null, to, n: Math.round(clamp(hold * (short ? 2.2 : 6 * days / 220), 3, 120)), rate: Math.round(mixPrice(gid) * fishMarket(to) * (1.16 + rand() * .18)) };
+  } else {
+    const cands = [];
+    for (const cg of CARGO_IDS) for (const from of ports) for (const to of PORTS) {
+      if (to.id === from || !portOpen(to.id) || (to.gateway && cg !== 'lumber') || demandRate(to.id, cg) <= 0 || supplyRate(from, cg) <= 0 || usRun(from, to.id) || taken.has(cg + from + to.id)) continue;
+      const d = distKm(from, to.id); if (d >= 35 && d <= 300) cands.push({ cg, from, to: to.id, d });
+    }
+    if (!cands.length) return null;
+    const x = pick(cands), power = boats.reduce((a, t) => a + MODELS[t.model].power, 0), logs = x.cg === 'logs';
+    const n = Math.round(clamp(Math.min(power * (logs ? 6 : 2.4) * clamp(200 / x.d, .45, 2) * (short ? .35 : days / 220), supplyRate(x.from, x.cg) * span * .55), logs ? 9 : 5, logs ? 140 : 70));
+    k = { id, c: x.cg, from: x.from, to: x.to, n, rate: Math.round(contractBase(x.cg, x.from, x.to) * (1.12 + rand() * .18) * 10) / 10 };
+  }
+  const years = short ? 1 : rand() < .6 ? 1 : 2;
+  Object.assign(k, { cust: contractCustomer(k.c, k.to, y), done: 0, pen: Math.round(k.rate * .45), years, left: years, short, span: short ? span : 0, state: 'offer', offered: Math.floor(S.day), expires: S.day + 12, due: null, ceil: k.rate });
+  contracts().push(k);
+  return k;
 }
 
 /* ---------- fishing ---------- */
@@ -4440,7 +4598,7 @@ function contractsHTML() {
   const act = activeContracts(), off = offeredContracts();
   const rec = (S.kFilled || S.kShort) ? ` Your record: ${S.kFilled || 0} filled, ${S.kShort || 0} short.` : '';
   return `<h3>Contracts <span class="count">${act.length}</span></h3>
-  ${act.length || off.length ? `<ul class="list">${[...off, ...act].map(k => `<li><button class="item" data-act="select" data-t="contract" data-id="${k.id}">${contractGlyph(k)}<span><b>${k.state === 'offer' ? 'Offer: ' : ''}${esc(ucf(qtyText(k)))}</b><small>${esc(runText(k))} · ${k.state === 'offer' ? `${esc(k.cust)}, ${money(k.rate)} a ${unit(k)}` : `${Math.floor(needOf(k))} still wanted ${dueText(k)}`}</small></span><span class="side">${k.state === 'offer' ? '<span class="newtag">New</span>' : kBar(k)}</span></button></li>`).join('')}</ul>`
+  ${act.length || off.length ? `<ul class="list">${[...off, ...act].map(k => `<li><button class="item" data-act="select" data-t="contract" data-id="${k.id}">${contractGlyph(k)}<span><b>${k.state === 'offer' ? 'Offer: ' : ''}${esc(ucf(qtyText(k)))}</b><small>${esc(runText(k))} · ${k.state === 'offer' ? `${esc(k.cust)}, ${fmtPx(k.rate)} a ${unit(k)}` : `${Math.floor(needOf(k))} still wanted ${dueText(k)}`}</small></span><span class="side">${k.state === 'offer' ? '<span class="newtag">New</span>' : kBar(k)}</span></button></li>`).join('')}</ul>`
     : '<p class="fine">No contracts just now. Customers write with offers each spring, and now and then during the season.</p>'}
   <p class="fine">A contract pays a fixed price above the market for so many loads a season. Fall short and you pay a penalty on each missing load. You can hold ${contractCap()} at once.${rec}</p>`;
 }
@@ -4453,15 +4611,15 @@ function contractHTML(id) {
   return `${head(offer ? 'Contract offer' : 'Contract', esc(ucf(qtyText(k))))}
   <p class="desc">${esc(letter)}</p>
   <dl class="kv">
-    <dt>Pays</dt><dd class="pos">${money(k.rate)} a ${unit(k)}</dd>
-    <dt>The market pays now</dt><dd>${mkt > 0 ? money(mkt) + ' a ' + unit(k) : 'Nothing'}</dd>
+    <dt>${offer ? 'Pays up to' : 'Pays'}</dt><dd class="pos">${fmtPx(k.rate)} a ${unit(k)}</dd>
+    <dt>The market pays now</dt><dd>${mkt > 0 ? fmtPx(mkt) + ' a ' + unit(k) : 'Nothing'}</dd>
     <dt>Penalty</dt><dd class="neg">${money(k.pen)} a missing ${unit(k)}</dd>
     <dt>${offer ? 'Each season' : 'This season'}</dt><dd>${offer ? qtyText(k) : kBar(k)}</dd>
     <dt>Deadline</dt><dd>${k.due ? fmtDate(k.due) : k.short ? `${k.span} days after you sign` : 'End of the season'}</dd>
     ${k.years > 1 ? `<dt>Seasons</dt><dd>${offer ? k.years : `${k.left} of ${k.years} left`}</dd>` : ''}
   </dl>
-  ${offer ? `<div class="row"><button class="btn primary wide" data-act="kAccept" data-id="${k.id}">Sign it</button><button class="btn wide" data-act="kDecline" data-id="${k.id}">Turn it down</button></div>
-    <p class="fine">The offer stands until ${fmtDate(k.expires)}. ${activeContracts().length >= contractCap() ? `You already hold ${contractCap()} contracts, as many as you can manage.` : ''}</p>` : ''}
+  ${offer ? `<div class="row"><button class="btn primary wide" data-act="kBid" data-id="${k.id}" ${activeContracts().length >= contractCap() ? 'disabled' : ''}>Bid for it</button><button class="btn wide" data-act="kDecline" data-id="${k.id}">Turn it down</button></div>
+    <p class="fine">${activeContracts().length >= contractCap() ? `You already hold ${contractCap()} contracts, as many as you can manage.` : 'Other companies can bid against you: the customer signs with whoever asks the least.'} The offer stands until ${fmtDate(k.expires)}.</p>` : ''}
   <h3>${fish ? 'Fish tugs' : 'Tugs'} for it</h3>
   ${mine.length ? `<ul class="list">${mine.map(t => `<li><button class="item" data-act="kTug" data-id="${k.id}" data-tug="${t.id}" ${onRun(t) ? 'disabled' : ''}>${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${onRun(t) ? (fish ? `Lands her catch at ${PORT[k.to].name}` : 'On this run') : fish ? `Lands at ${t.home ? PORT[t.home].name : 'nowhere yet'}` : t.route.length ? 'Works ' + t.route.map(p => PORT[p].name).join(', ') : 'No route'}</small></span><span class="side">${onRun(t) ? '✓' : fish ? 'Land here' : 'Put her on it'}</span></button></li>`).join('')}</ul>
     <p class="fine">${fish ? `Her catch counts toward the contract when she lands it at ${PORT[k.to].name}.` : `"Put her on it" gives her the route ${runText(k)}. Her captain carries the contract cargo first, as long as the contract still wants it.`}</p>`
@@ -4471,13 +4629,73 @@ function offersHTML() {
   const off = offeredContracts(); if (!off.length) return null;
   return `<div class="rules"><span>${fmtDate(S.day)}</span><span>Letters at the office</span></div>
   <h2>Contract offers for ${S.year}</h2>
-  <div class="models">${off.map(k => `<div class="model"><div><h4>${esc(ucf(qtyText(k)))}</h4><p>${esc(ucf(k.cust))}${k.from ? `, ${esc(runText(k))}` : ''}, ${dueText(k)}${k.years > 1 ? `, every season for ${k.years} seasons` : ''}. ${money(k.rate)} a ${unit(k)}; the market pays ${money(kMarket(k))}. Penalty ${money(k.pen)} a missing ${unit(k)}.</p></div>
-    <div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary" data-act="kAccept" data-id="${k.id}" data-modal="1">Sign</button><button class="btn" data-act="kDecline" data-id="${k.id}" data-modal="1">No thanks</button></div></div>`).join('')}</div>
+  <div class="models">${off.map(k => `<div class="model"><div><h4>${esc(ucf(qtyText(k)))}</h4><p>${esc(ucf(k.cust))}${k.from ? `, ${esc(runText(k))}` : ''}, ${dueText(k)}${k.years > 1 ? `, every season for ${k.years} seasons` : ''}. ${fmtPx(k.rate)} a ${unit(k)}; the market pays ${money(kMarket(k))}. Penalty ${money(k.pen)} a missing ${unit(k)}.</p></div>
+    <div style="display:flex;flex-direction:column;gap:6px"><button class="btn primary" data-act="kBid" data-id="${k.id}" data-modal="1" ${activeContracts().length >= contractCap() ? 'disabled' : ''}>Bid</button><button class="btn" data-act="kDecline" data-id="${k.id}" data-modal="1">No thanks</button></div></div>`).join('')}</div>
+  <p class="fine">Other companies can bid against you for each one. The customer signs with whoever asks the least.</p>
   <div class="row"><button class="btn wide ghost" data-act="closeModal">Decide later</button></div>`;
 }
+// The tender: the letter, the bids so far, and your bid
+function tenderHTML(T = TENDER) {
+  if (!T) return null;
+  const k = T.k, u = unit(k), mkt = kMarket(k), at = fmtDate(S.day), run = k.from ? `from ${runText(k)}` : runText(k);
+  const terms = `${qtyText(k)} ${run}, ${dueText(k)}${k.years > 1 ? `, every season for ${k.years} seasons` : ''}`;
+  const letter = T.opener === 'p' ? `${ucf(k.cust)} want ${terms}. They will pay up to ${fmtPx(k.ceil)} a ${u}, and sign with whichever company asks the least.`
+    : `${coName(T.opener)} has offered ${k.cust} to carry ${terms}. The customer will sign with whichever company asks the least, up to ${fmtPx(k.ceil)} a ${u}.`;
+  const who = id => id === 'p' ? 'You' : coName(id);
+  const rows = T.log.map(b => `<li class="${b.who === 'p' ? 'you' : ''}${b.out ? ' out' : ''}"><b>${esc(who(b.who))}</b><span>${b.out ? (b.who === 'p' ? 'let it go' : b.busy ? 'too busy to bid' : 'drops out') : `${fmtPx(b.rate)} a ${u}`}</span></li>`).join('');
+  const others = T.rivals.filter(r => !r.out && r.id !== T.lead).map(r => coName(r.id));
+  const cap = activeContracts().length >= contractCap();
+  const head = `<div class="rules"><span>${at}</span><span>Tender</span></div>
+  <h2>${esc(ucf(qtyText(k)))}</h2>
+  <p class="desc">${esc(letter)}</p>
+  <dl class="kv"><dt>The market pays now</dt><dd>${mkt > 0 ? `${fmtPx(mkt)} a ${u}` : 'Nothing'}</dd><dt>If you fall short</dt><dd>45% of your price, each missing ${u}</dd></dl>
+  <h3>Bids</h3>
+  <ul class="bids">${rows || '<li class="none">No bids yet.</li>'}</ul>`;
+  if (T.done) {
+    const verdict = T.won ? `<div class="verdict win"><b>The contract is yours at ${fmtPx(k.rate)} a ${u}.</b><span class="fine">${mkt > 0 ? (k.rate >= mkt ? `That is ${fmtPx(k.rate - mkt)} a ${u} more than the market pays now, and the price holds however the market goes.` : `That is less than the market pays now, but the price holds however the market goes.`) : 'The price holds however the market goes.'} ${onRunText(k)}</span></div>`
+      : `<div class="verdict"><b>${esc(coName(T.lead))} has the contract at ${fmtPx(k.rate)} a ${u}.</b><span class="fine">Its boats will carry for ${esc(k.cust)}${k.years > 1 ? ` for ${k.years} seasons` : ' this season'}.</span></div>`;
+    const letters = T.back === 'offers' && offeredContracts().length;
+    return `${head}${verdict}<div class="row"><button class="btn primary wide" data-act="tDone">${letters ? 'Back to the letters' : T.won ? 'Choose a boat for it' : 'Carry on'}</button></div>`;
+  }
+  const max = T.lead ? roundBid(T.rate - T.step) : k.ceil, can = !cap && max > 0;
+  const status = T.lead && T.lead !== 'p' ? `<p class="status"><b>${esc(coName(T.lead))}</b> is lowest at ${fmtPx(T.rate)} a ${u}. Go lower to take it from them, or let it go.</p>`
+    : !T.log.length ? `<p class="fine">${T.rivals.length ? `${esc(listAnd(T.rivals.map(r => coName(r.id))))} could bid against you.` : 'No other company works near this run, so nobody is likely to bid against you.'}</p>` : '';
+  return `${head}${status}
+  ${can ? `<div class="stepper"><button data-act="tDown" aria-label="Ask ${fmtPx(T.step)} less">−</button><output id="tMy" aria-live="polite">${fmtPx(T.my)} a ${u}</output><button data-act="tUp" aria-label="Ask ${fmtPx(T.step)} more">+</button></div>
+  <p class="fine" id="tNote">${tenderNote(T)}</p>` : `<p class="fine">${cap ? `You already hold ${contractCap()} contracts, as many as you can manage.` : 'The price is as low as it can go.'}</p>`}
+  <div class="row">${can ? `<button class="btn primary wide" id="tBidBtn" data-act="tBid">Bid ${fmtPx(T.my)}</button>` : ''}<button class="btn wide" data-act="tPass">${T.youBid || T.opener !== 'p' ? 'Let it go' : 'Not now'}</button></div>
+  <p class="fine">Each company can go lower or drop out. The lowest bid left when the others drop out wins.${others.length && T.log.length ? ` Still in: ${esc(listAnd(others))}.` : ''}</p>`;
+}
+const onRunText = k => { const t = S.tugs.find(t => t.owner === 'p' && (k.c === 'fish' ? isFish(t) && t.home === k.to : !isFish(t) && t.route.includes(k.from) && t.route.includes(k.to)));
+  return t ? `${t.name} already works this run.` : `Put a ${k.c === 'fish' ? 'fish tug to land her catch there' : 'tug on the run'} to fill it.`; };
+const listAnd = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+function tenderNote(T) {
+  const mkt = kMarket(T.k), d = T.my - mkt, u = unit(T.k);
+  return mkt > 0 ? (Math.abs(d) < .005 ? 'The same as the market pays now.' : `${fmtPx(Math.abs(d))} a ${u} ${d > 0 ? 'more' : 'less'} than the market pays now.`) + ` In all, ${money(T.my * T.k.n)} a season if you fill it.` : `In all, ${money(T.my * T.k.n)} a season if you fill it.`;
+}
+// The bid buttons change the price where it is, without redrawing the sheet
+function tenderStep(dir) {
+  const T = TENDER; if (!T || T.done) return;
+  const max = T.lead ? roundBid(T.rate - T.step) : T.k.ceil, min = roundBid(T.k.ceil * .5);
+  T.my = roundBid(clamp(T.my + dir * T.step, min, max));
+  const u = unit(T.k), o = $('#tMy'), b = $('#tBidBtn'), n = $('#tNote');
+  if (o) o.textContent = `${fmtPx(T.my)} a ${u}`; if (b) b.textContent = `Bid ${fmtPx(T.my)}`; if (n) n.textContent = tenderNote(T);
+  const [dn, up] = document.querySelectorAll('#modalBody .stepper button'); if (dn) dn.disabled = T.my <= min; if (up) up.disabled = T.my >= max;
+}
+function openTender(k, back) {
+  if (!k || k.state !== 'offer') return;
+  if (activeContracts().length >= contractCap()) { toast(`You can manage ${contractCap()} contracts at once. More boats, more contracts.`, true); return; }
+  TENDER = newTender(k, 'p'); TENDER.back = back; showModal(tenderHTML());
+}
+function closeTender() {
+  const T = TENDER; TENDER = null; if (!T) { closeModal(); return; }
+  const h = T.back === 'offers' && offersHTML(); if (h) { showModal(h); return; }
+  closeModal(); if (T.won) select({ t: 'contract', id: T.k.id });
+}
 function portContractsHTML(pid) {
-  const ks = activeContracts().filter(k => k.to === pid || k.from === pid); if (!ks.length) return '';
-  return `<ul class="list">${ks.map(k => `<li><button class="item" data-act="select" data-t="contract" data-id="${k.id}">${contractGlyph(k)}<span><b>Contract: ${esc(qtyText(k))}</b><small>${esc(runText(k))}, ${Math.floor(needOf(k))} still wanted</small></span><span class="side">${kBar(k)}</span></button></li>`).join('')}</ul>`;
+  const ks = activeContracts().filter(k => k.to === pid || k.from === pid), rk = rivalContracts().filter(k => k.to === pid || k.from === pid);
+  return (ks.length ? `<ul class="list">${ks.map(k => `<li><button class="item" data-act="select" data-t="contract" data-id="${k.id}">${contractGlyph(k)}<span><b>Contract: ${esc(qtyText(k))}</b><small>${esc(runText(k))}, ${Math.floor(needOf(k))} still wanted</small></span><span class="side">${kBar(k)}</span></button></li>`).join('')}</ul>` : '')
+    + (rk.length ? `<p class="fine">${rk.map(k => `${esc(coName(k.by))} has a contract for ${esc(qtyText(k))} ${esc(k.from ? 'from ' + runText(k) : runText(k))}.`).join(' ')}</p>` : '');
 }
 function hullBar(h) { const cls = h > 60 ? '' : h > 30 ? 'warn' : 'bad'; return `<div class="hull"><div class="bar ${cls}"><i style="width:${Math.round(h)}%"></i></div><span>${Math.round(h)}%</span></div>`; }
 function companyHTML() {
@@ -4540,6 +4758,8 @@ function coHTML(id) {
     ? `<div class="row"><button class="btn wide" data-act="select" data-t="stock" data-id="${id}">Its shares · ${fmtPx(sharePrice(id))}${S.mkt.hold[id] ? `, you hold ${pctOf(S.mkt.hold[id], id)}` : `, ${fmtN(own(id).float)} on the market`}</button></div>`
     : `<div class="row"><button class="btn wide" data-act="offer" data-id="${id}" ${st.refused === S.year ? 'disabled' : ''}>Make the owners an offer</button></div><p class="fine">${st.refused === S.year ? 'They turned you down this season. They will hear another offer next year.' : 'A family firm with no shares on the market. The owners sell only if the price is right.'}</p>`}
   ${boardSeat(id) ? `<dl class="kv"><dt>Cash in hand (from the board)</dt><dd>${money(st.cash || 0)}</dd><dt>Worth</dt><dd>${money(rivalValue(id))}</dd></dl>` : ''}
+  ${rivalContracts(id).length ? `<h3>Contracts <span class="count">${rivalContracts(id).length}</span></h3>
+  <ul class="news">${rivalContracts(id).map(k => `<li>${esc(ucf(qtyText(k)))} ${esc(k.from ? 'from ' + runText(k) : runText(k))} for ${esc(k.cust)}, at ${fmtPx(k.rate)} a ${unit(k)}${k.years > 1 ? `, ${k.left} season${k.left === 1 ? '' : 's'} to run` : ''}.</li>`).join('')}</ul>` : ''}
   <h3>Fleet <span class="count">${fleet.length}</span></h3>
   ${st.extra && coActive(c, y) ? `<p class="fine">Good seasons have paid for ${st.extra === 1 ? 'one boat' : 'two boats'} more than it really had. A poor season may see ${st.extra === 1 ? 'her' : 'one'} sold.</p>` : ''}
   ${fleet.length ? `<ul class="list">${fleet.map(t => `<li><button class="item" data-act="select" data-t="tug" data-id="${t.id}">${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${esc(MODELS[t.model].name)}. ${esc(statusOf(t))}</small></span><span class="side">${money(t.earn)}</span></button></li>`).join('')}</ul>` : '<p class="fine">No boats on the map.</p>'}
@@ -5132,7 +5352,7 @@ function routePreview(stops, t) {
 function queueModal(fn) { ui.queue.push(fn); if (!ui.modalOpen) nextModal(); }
 function nextModal() { const fn = ui.queue.shift(); if (!fn) { closeModal(); return; } showModal(typeof fn === 'function' ? fn() : fn); }
 function showModal(html, cls) { $('#modalBody').className = 'sheet' + (cls ? ' ' + cls : ''); $('#modalBody').innerHTML = html; $('#modal').hidden = false; ui.modalOpen = true; $('#modalBody').scrollTop = 0; const b = $('#modalBody .btn.primary'); if (b) b.focus({ preventScroll: true }); }
-function closeModal() { $('#modal').hidden = true; ui.modalOpen = false; if (playLog.unsub) { playLog.unsub(); playLog.unsub = null; } if (ui.queue.length) nextModal(); }
+function closeModal() { if (TENDER && !TENDER.done) { tenderPass(TENDER); TENDER = null; ui.panelDirty = true; } else if (TENDER && TENDER.done) TENDER = null; $('#modal').hidden = true; ui.modalOpen = false; if (playLog.unsub) { playLog.unsub(); playLog.unsub = null; } if (ui.queue.length) nextModal(); }
 /* ---------- First-play tour: the screen dims, a ring picks out one thing at a time, and a card explains it ---------- */
 const TOUR_KEY = 'tugboat-tour-v1';
 const tourSeen = () => { try { if (localStorage.getItem(TOUR_KEY)) return true; } catch (e) { /* storage blocked: fall back to the game's own record */ } return !!(S && S.seen && S.seen.tour); };
@@ -5197,7 +5417,7 @@ const TOUR = [
     enter: () => showInPanel([...document.querySelectorAll('#panel h3')].find(h => /^Contracts/.test(h.textContent))),
     rect: () => { const h = [...document.querySelectorAll('#panel h3')].find(h => /^Contracts/.test(h.textContent)); return rectOf(h, h && h.nextElementSibling); },
     body: () => { const k = offeredContracts()[0]; return 'Customers offer contracts: so many loads a season from one port to another, at a better price than the market. Fall short and you pay a penalty on every missing load.<br><br>'
-      + (k ? `Your first offer is here: ${esc(qtyText(k))} from ${esc(runText(k))}, the run ${esc(myTug().name)} already makes. After the tour, tap it and <b>Sign it</b>.` : 'New offers come each spring, and now and then during the season.'); } },
+      + (k ? `Your first offer is here: ${esc(qtyText(k))} from ${esc(runText(k))}, the run ${esc(myTug().name)} already makes. After the tour, tap it and <b>Bid for it</b>.` : 'New offers come each spring, and now and then during the season.'); } },
   { title: 'The menu',
     rect: () => rectOf($('[data-act="menu"]'), $('#soundBtn')),
     body: () => 'Save and load your game here, send it to another device, or share how your company is doing with family and friends. The game also saves itself at the end of every season.<br><br>Beside it, the speaker turns the sound on and off. To see this tour again, open the menu and tap <b>Show me how to play</b>.' },
@@ -5691,6 +5911,12 @@ const ACTS = {
   gfxLight: el => { const sc = $('#modalBody').scrollTop; GFX.light = el.dataset.v; gfxSave(); showModal(menuHTML()); $('#modalBody').scrollTop = sc; },
   soundSet: el => { setSound(el.dataset.v === '1'); if ($('#modalBody .slider')) showModal(menuHTML()); },
   kAccept: el => { const k = contracts().find(k => k.id === el.dataset.id); if (acceptContract(k)) toast(`Signed with ${k.cust}.`); if (el.dataset.modal) { const h = offersHTML(); if (h) showModal(h); else closeModal(); } ui.panelDirty = true; },
+  kBid: el => openTender(contracts().find(k => k.id === el.dataset.id), el.dataset.modal ? 'offers' : null),
+  tDown: () => tenderStep(-1),
+  tUp: () => tenderStep(1),
+  tBid: () => { if (!TENDER) return; tenderBid(TENDER, TENDER.my); showModal(tenderHTML()); },
+  tPass: () => { if (!TENDER) return; tenderPass(TENDER); if (TENDER.dropped) closeTender(); else showModal(tenderHTML()); },
+  tDone: () => closeTender(),
   kDecline: el => { declineContract(contracts().find(k => k.id === el.dataset.id)); if (el.dataset.modal) { const h = offersHTML(); if (h) showModal(h); else closeModal(); } else select(null); },
   kTug: el => { const k = contracts().find(k => k.id === el.dataset.id), t = S.tugs.find(t => t.id === el.dataset.tug); if (!k || !t) return;
     if (k.c === 'fish') { t.home = k.to; if (t.ground) assignGround(t, t.ground); toast(`${t.name} will land her catch at ${PORT[k.to].name}.`); }
@@ -5819,6 +6045,7 @@ function toast(text, bad) {
 }
 function migrate() {
   for (const t of S.tugs) { if (OLD_MODELS[t.model]) t.model = OLD_MODELS[t.model]; if (t.earnTotal == null) t.earnTotal = t.earn || 0; }
+  if (S.contracts) S.contracts = S.contracts.filter(k => k.state !== 'tender');
   for (const p of PORTS) if (!S.ports[p.id]) S.ports[p.id] = { stock: {}, glut: {}, millQ: 0, fishGlut: 0, built: {}, ice: 0 };
   if (S.premiumUntil == null) S.premiumUntil = S.premiumMult > 1 ? 1884 : 0;
   if (S.rank == null) S.rank = rankIdx(netWorth());
@@ -5830,7 +6057,7 @@ function migrate() {
   if (!S.mkt.own) { S.mkt.own = {}; for (const id in OWNERS) { const o = own(id), h = S.mkt.hold[id]; if (h) { S.mkt.hold[id] = Math.round(h * o.total / 1000); o.float = Math.max(0, Math.min(o.float, o.total - S.mkt.hold[id])); } } }
   if (!S.contracts) { S.contracts = []; S.rep = 0; }
 }
-function afterLoad() { migrate(); ui.sel = null; ui.mode = null; ui.panelDirty = true; ui.tickerDirty = true; for (const t of S.tugs) t.vhd = t.hd; }
+function afterLoad() { migrate(); TENDER = null; ui.sel = null; ui.mode = null; ui.panelDirty = true; ui.tickerDirty = true; for (const t of S.tugs) t.vhd = t.hd; }
 
 /* =====================================================================
    Sound: all made in the browser, nothing to download.
@@ -6886,7 +7113,7 @@ function start(data) {
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
 }
-window.__tugboatMap = MAP; window.__tugboat = { BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
+window.__tugboatMap = MAP; window.__tugboat = { BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
     for (const type of ['schooner2', 'schooner3', 'steambarge', 'laker', 'canaller', 'passenger']) { [0, .8, 1.57, 2.6, 3.14, -1.57].forEach((a, i) => { const v = { type, name: type, lenFt: type === 'laker' ? 500 : type === 'canaller' ? 255 : type === 'steambarge' ? 190 : 130, loaded: i % 2 === 0, cargo: 'lumber', hue: '#2f3a40' }; const L = shipLen(v); ctx.save(); ctx.translate(60 + i * 110, y); ctx.scale(scale / 2, scale / 2); ctx.rotate(a); drawShipBody(v, L, a, 0, false); ctx.restore(); }); y += 95; } ctx = keep; }, addShip, shipType, seaPath, shipsDay, advance(days) { for (let d = 0; d < days; d += .05) { simAdvance(.05); moveTraffic(.05); if (Math.floor(S.day) !== lastTrafficDay) { lastTrafficDay = Math.floor(S.day); trafficDay(); } } }, vehicles,  get WET() { return WET; }, CELL, isWet, NETPOS, RAIL_SEGS, ROAD_SEGS, ll, homeView, renderHI, clampCam, get fling() { return fling; }, get gesture() { return gesture; }, get HI() { return HI; }, get S() { return S; }, simAdvance, startSeason, endSeason, newGame, PORT, GROUND, MODELS, getPath, nodePos, deliveryValue, distKm, buyTug, saveRoute, assignGround, netWorth, ui, select, cam, get GW() { return GW; }, get GH() { return GH; }, get WATER() { return WATER; } };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
