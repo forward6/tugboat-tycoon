@@ -4352,8 +4352,8 @@ function tap(x, y) {
 /* =====================================================================
    The inspector panel
    ===================================================================== */
-const ui = { sel: null, mode: null, panelDirty: true, tickerDirty: true, lastPanel: '', speed: 1, modalOpen: false, queue: [], hold: false, confirmSell: null, confirmNew: false, yard: 'collingwood', buyName: null, sheetOpen: true };
-function select(s) { ui.sel = s; ui.confirmSell = null; ui.panelDirty = true; if (s && window.innerWidth < 900) $('#panel').classList.remove('collapsed'); }
+const ui = { sel: null, mode: null, panelDirty: true, tickerDirty: true, lastPanel: '', speed: 1, modalOpen: false, queue: [], hold: false, confirmSell: null, confirmLayup: false, confirmNew: false, yard: 'collingwood', buyName: null, sheetOpen: true };
+function select(s) { ui.sel = s; ui.confirmSell = null; ui.confirmLayup = false; ui.panelDirty = true; if (s && window.innerWidth < 900) $('#panel').classList.remove('collapsed'); }
 const panelEl = $('#panelInner');
 panelEl.addEventListener('toggle', e => { if (e.target.hasAttribute && e.target.hasAttribute('data-sheet')) ui.sheetOpen = e.target.open; }, true);
 function renderPanel() {
@@ -4495,11 +4495,11 @@ function companyHTML() {
   <div class="row"><button class="btn primary wide" data-act="shipyard">Buy a boat</button><button class="btn wide" data-act="bank">Bank</button></div>
   <div class="row"><button class="btn wide" data-act="select" data-t="exch">Stock exchange · ${fmtPx(sharePrice('me'))} a share${S.mkt.me.mine < SHARES ? `, you hold ${pctOf(S.mkt.me.mine)}` : ''}</button></div>
   <h3>Your fleet <span class="count">${mine.length}</span></h3>
-  ${fleetLayupHTML(mine)}
   ${mine.length ? `<ul class="list">${mine.map(t => `<li><button class="item" data-act="select" data-t="tug" data-id="${t.id}">${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${esc(statusOf(t))}</small></span><span class="side">${money(t.earn)}</span></button></li>`).join('')}</ul>` : '<p class="fine">You have no boats. Order one from the yards at Collingwood or Owen Sound.</p>'}
-  ${contractsHTML()}
+  ${fleetLayupHTML(mine)}
   <h3>Tow wanted <span class="count">${jobs.length}</span></h3>
   ${jobs.length ? `<ul class="list">${jobs.map(j => `<li><button class="item" data-act="select" data-t="job" data-id="${j.id}">${jobGlyph(j)}<span><b>${j.kind === 'salvage' ? 'Salvage' : 'Schooner'} ${esc(j.name)}</b><small>${esc(j.where)}, to ${PORT[j.dest].name}. ${daysLeft(j)} left.</small></span><span class="side">${money(j.reward)}</span></button></li>`).join('')}</ul>` : '<p class="fine">No ships are asking for a tow right now. Wind-bound schooners and wrecks show up on the map with a pulsing ring.</p>'}
+  ${contractsHTML()}
   ${competitionHTML()}
   <h3>News</h3>
   <ul class="news">${S.news.slice(0, 6).map(n => `<li><time>${fmtShort(n.day)}</time>${esc(n.text)}</li>`).join('')}</ul>`;
@@ -4507,10 +4507,14 @@ function companyHTML() {
 const ordinal = n => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
 const coGlyph = c => `<svg class="glyph" viewBox="0 0 22 22"><path d="M2 13h18l-3 4H4z" fill="${c.color}"/><rect x="5" y="9" width="7" height="4" fill="${c.color}"/><rect x="13" y="5" width="3" height="8" fill="${c.color}"/></svg>`;
 function fleetLayupHTML(mine) {
-  if (!S.season) return '';
+  if (!S.season) { ui.confirmLayup = false; return ''; }
   const laid = mine.filter(t => t.layup).length, free = mine.filter(t => !t.layup && !t.jobTow).length;
   const late = monthOf(S.day) >= 11;
+  if (!(late && free)) ui.confirmLayup = false;
   if (!laid && !(late && free)) return '';
+  if (ui.confirmLayup) return `<div class="confirm"><b>Lay up ${free === 1 ? 'your working boat' : free === 2 ? 'both working boats' : `all ${free} working boats`} for the winter?</b>
+    <p class="fine">${free === 1 ? 'She makes' : 'Each makes'} for port, delivers what she carries and stays tied up, safe from gales, until spring or until you fit ${free === 1 ? 'her' : 'them'} out again.${mine.some(t => !t.layup && t.jobTow) ? ' Boats bringing in a schooner finish the tow first.' : ''}</p>
+    <div class="row"><button class="btn primary wide" data-act="layupAllYes">Lay ${free === 1 ? 'her' : 'them'} up</button><button class="btn wide" data-act="layupAllNo">Cancel</button></div></div>`;
   return `<div class="row">${late && free ? '<button class="btn wide ghost" data-act="layupAll">Lay up the fleet</button>' : ''}${laid ? `<button class="btn wide" data-act="fitOutAll">Fit out ${laid === 1 ? 'the laid-up boat' : laid === 2 ? 'both laid-up boats' : `all ${laid} laid-up boats`}</button>` : ''}</div>
   ${late && free ? `<p class="fine">${uninsured() ? 'Insurance has run out: anything lost now is lost for good.' : 'Insurance runs out on 30 November.'} Laid-up boats are safe from gales and cost little.</p>` : ''}`;
 }
@@ -4868,10 +4872,10 @@ function tugHTML(t) {
     orders = `<h3>Route</h3>
     ${t.route.length >= 2 ? `<ol class="stops">${t.route.map((p, i) => `<li class="${i === t.ri % t.route.length && S.season ? 'next' : ''}">${esc(PORT[p].name)}</li>`).join('')}</ol>` : '<p class="fine">No route yet.</p>'}
     <button class="btn" data-act="editRoute">${t.route.length >= 2 ? 'Change route' : 'Set a route'}</button>
-    <p class="fine">At each stop the captain delivers cargo that pays here and loads whatever pays best further along the route. Logs go in a boom: three times the load, but slow.</p>
-    <h3>In tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing in tow.'}</p>
-    ${jobs.length ? `<h3>Tow wanted</h3><ul class="list">${jobs.map(j => `<li><button class="item" data-act="select" data-t="job" data-id="${j.id}">${jobGlyph(j)}<span><b>${esc(j.name)}</b><small>${esc(j.where)} → ${PORT[j.dest].name}</small></span><span class="side">${money(j.reward)}</span></button></li>`).join('')}</ul>` : ''}`;
+    <p class="fine">At each stop the captain delivers cargo that pays here and loads whatever pays best further along the route. Logs go in a boom: three times the load, but slow.</p>`;
   }
+  const towing = isFish(t) ? '' : `<h3>In tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing in tow.'}</p>
+    ${jobs.length ? `<h3>Tow wanted</h3><ul class="list">${jobs.map(j => `<li><button class="item" data-act="select" data-t="job" data-id="${j.id}">${jobGlyph(j)}<span><b>${esc(j.name)}</b><small>${esc(j.where)} → ${PORT[j.dest].name}</small></span><span class="side">${money(j.reward)}</span></button></li>`).join('')}</ul>` : ''}`;
   const sell = ui.confirmSell === t.id
     ? `<div class="confirm"><b>Sell ${esc(t.name)} for ${money(tugValue(t) * .8)}?</b><div class="row"><button class="btn danger wide" data-act="sellYes">Sell her</button><button class="btn wide" data-act="sellNo">Keep her</button></div></div>`
     : `<button class="btn ghost" data-act="sell">Sell for ${money(tugValue(t) * .8)}</button>`;
@@ -4881,6 +4885,7 @@ function tugHTML(t) {
   <dl class="kv"><dt>Hull</dt><dd>${hullBar(t.hull)}</dd><dt>Earned this season</dt><dd class="pos">${money(t.earn)}</dd><dt>Built</dt><dd>${yearOf(t.bought)}${ageOf(t) >= 1 ? `, ${Math.floor(ageOf(t))} years old` : ''}</dd><dt>Running cost</dt><dd>${t.state === 'laid' && S.season ? `${money(runCost(t) * LAID_COST)} a day, laid up` : `${money(runCost(t))} a day`}</dd><dt>Speed</dt><dd>${m.kn} knots${m.raftKn ? `, ${m.raftKn} with a raft` : m.sail ? ' in a breeze' : ''}</dd></dl>
   ${ageOf(t) >= 25 ? '<p class="fine">She is getting old: she burns more coal and suffers more in a gale every year. Think about replacing her.</p>' : ''}
   <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details>
+  ${towing}
   <h3>Captain's orders</h3>
   <div class="seg" role="group" aria-label="Captain's stance"><button data-act="stance" data-v="cautious" aria-pressed="${t.stance === 'cautious'}">Cautious</button><button data-act="stance" data-v="bold" aria-pressed="${t.stance === 'bold'}">Bold</button></div>
   <p class="fine">${t.stance === 'cautious' ? 'Runs for shelter when a gale is forecast and stays in port until it blows over.' + (isFish(t) ? ' Obeys the closed season.' : '') : 'Keeps going whatever the glass says. Faster, but gales wreck tows, damage the hull and can sink her.' + (isFish(t) ? ' Fishes through the closed season.' : '')}</p>
@@ -5725,7 +5730,9 @@ const ACTS = {
   sell: () => { const t = tugSel(); if (t) ui.confirmSell = t.id; ui.panelDirty = true; },
   layup: () => { const t = tugSel(); if (t && orderLayup(t)) toast(t.state === 'laid' ? `${t.name} is laid up at ${PORT[t.at].name}.` : `${t.name} is making for ${PORT[t.layup].name} to lay up.`); ui.panelDirty = true; },
   fitOut: () => { const t = tugSel(); if (t && fitOut(t)) toast(`${t.name} is fitting out.`); ui.panelDirty = true; },
-  layupAll: () => { const n = S.tugs.filter(t => t.owner === 'p' && orderLayup(t)).length; if (n) toast(`Laying up ${n} boat${n === 1 ? '' : 's'} for the winter.`); ui.panelDirty = true; },
+  layupAll: () => { ui.confirmLayup = true; ui.panelDirty = true; },
+  layupAllYes: () => { ui.confirmLayup = false; const n = S.tugs.filter(t => t.owner === 'p' && orderLayup(t)).length; if (n) toast(`Laying up ${n} boat${n === 1 ? '' : 's'} for the winter.`); ui.panelDirty = true; },
+  layupAllNo: () => { ui.confirmLayup = false; ui.panelDirty = true; },
   fitOutAll: () => { const n = S.tugs.filter(t => t.owner === 'p' && fitOut(t)).length; if (n) toast(`Fitting out ${n} boat${n === 1 ? '' : 's'}.`); ui.panelDirty = true; },
   sellNo: () => { ui.confirmSell = null; ui.panelDirty = true; },
   exchangeGo: () => { closeModal(); select({ t: 'exch' }); },
