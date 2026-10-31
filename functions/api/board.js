@@ -27,14 +27,14 @@ export async function onRequestPost({ request, env }) {
   if (!board[id] && Object.keys(board).length >= 200) return json({ error: 'board full' }, 429);
   const now = Date.now(), p = board[id] || { id, first: now, minutes: 0, sessions: 0 };
   // a player from before best games were kept: the game on the board until now is their best so far
-  if (!p.best && p.worth != null) p.best = { worth: p.worth, company: p.company, year: p.year, title: p.title, game: p.game || null, at: p.last || now };
+  if (!p.best && p.worth != null) p.best = { worth: p.worth, company: p.company, year: p.year, month: p.month || null, title: p.title, game: p.game || null, at: p.last || now };
   const game = clip(r.game, 40);
   Object.assign(p, {
-    name: clip(r.name, 30) || p.name || '', game, company: clip(r.company, 60), year: num(r.year, 1870, 2100), worth: num(r.worth, -1e9, 1e12),
+    name: clip(r.name, 30) || p.name || '', game, company: clip(r.company, 60), year: num(r.year, 1870, 2100), month: clip(r.month, 12) || null, worth: num(r.worth, -1e9, 1e12),
     title: clip(r.title, 40), boats: num(r.boats, 0, 999), device: clip(r.device, 20), app: !!r.app, last: now,
   });
   // the best game: the most any of the player's companies has been worth, and when it got there
-  if (p.worth != null && (!p.best || p.worth > p.best.worth)) p.best = { worth: p.worth, company: p.company, year: p.year, title: p.title, game: game || null, at: now };
+  if (p.worth != null && (!p.best || p.worth > p.best.worth)) p.best = { worth: p.worth, company: p.company, year: p.year, month: p.month, title: p.title, game: game || null, at: now };
   // how many games: the last 50 game ids seen
   if (game) { p.games = Array.isArray(p.games) ? p.games : []; if (!p.games.includes(game)) { p.games.push(game); if (p.games.length > 50) p.games.shift(); } }
   p.minutes = Math.round((p.minutes + (num(r.minutes, 0, 15) || 0)) * 10) / 10;

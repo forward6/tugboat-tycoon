@@ -6227,7 +6227,7 @@ const deviceName = () => { const u = navigator.userAgent; return /iPad/.test(u) 
 function boardReport(start, leaving) {
   if (!BOARD.on || !S || navigator.onLine === false) return;
   const t = performance.now(), minutes = BOARD.mark ? Math.min(15, (t - BOARD.mark) / 60000) : 0; BOARD.mark = leaving ? 0 : t;
-  const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, worth: Math.round(nw), title: titleFor(nw),
+  const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, month: S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter', worth: Math.round(nw), title: titleFor(nw),
     boats: S.tugs.filter(x => x.owner === 'p').length, device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
   try {
     if (leaving && navigator.sendBeacon) navigator.sendBeacon('api/board', new Blob([body], { type: 'application/json' }));
@@ -6255,14 +6255,15 @@ function boardHTML(data) {
   const head = `<div class="rules"><span>Tugboat Tycoon</span><span>Who's playing</span></div><h2>Scoreboard</h2>`, close = '<div class="row"><button class="btn primary wide" data-act="closeModal">Close</button></div>';
   if (!data) return `${head}<p class="desc">The scoreboard needs a connection. Try again when you're online.</p>${close}`;
   if (data.off) return `${head}<p class="desc">The scoreboard isn't switched on yet.</p>${close}`;
-  const best = p => p.best && p.best.worth != null ? p.best : { worth: p.worth || 0, company: p.company, year: p.year, title: p.title, game: p.game };
+  const best = p => p.best && p.best.worth != null ? p.best : { worth: p.worth || 0, company: p.company, year: p.year, month: p.month, title: p.title, game: p.game };
   const ps = (data.players || []).slice().sort((a, b) => (best(b).worth || 0) - (best(a).worth || 0));
   const row = (p, i) => {
     const b = best(p), same = b.game ? b.game === p.game : b.company === p.company;
-    const now = same ? `Still playing it, now in ${p.year}${(p.worth || 0) < b.worth ? `, worth ${money(p.worth || 0)}` : ''}` : `Now playing ${esc(p.company || 'a new company')}: ${p.year}, worth ${money(p.worth || 0)}`;
+    const when = (m, y) => m ? `${esc(m)} ${y}` : `${y}`;
+    const now = same ? `Still playing it, now in ${when(p.month, p.year)}${(p.worth || 0) < b.worth ? `, worth ${money(p.worth || 0)}` : ''}` : `Now playing ${esc(p.company || 'a new company')}: ${when(p.month, p.year)}, worth ${money(p.worth || 0)}`;
     const games = p.gamesPlayed || 1;
     return `<li><div class="item board${p.id === BOARD.id ? ' you' : ''}"><span class="rank">${i + 1}</span><span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">You</span>' : ''}</b>
-    <small>Best: ${esc(b.company || '')} · ${esc(b.title || '')}${b.year ? ` · ${b.year}` : ''}</small>
+    <small>Best: ${esc(b.company || '')} · ${esc(b.title || '')}${b.year ? ` · ${when(b.month, b.year)}` : ''}</small>
     <small>${now}</small>
     <small>Last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${p.app ? 'the' : /^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}${p.app ? ' home screen' : ''}` : ''} · ${playedText(p.minutes || 0)} in all · ${games} game${games === 1 ? '' : 's'}</small></span>
     <span class="side">${money(b.worth || 0)}<small>best</small></span></div></li>`;
