@@ -5441,7 +5441,7 @@ function titleHTML(saved) {
   <p class="fine">Pinch, scroll or double-tap to zoom in, drag to move around, and tap anything on the map. The corner button brings back the whole bay. The years roll on for as long as you like to play.</p>
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="newGameYes">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
   ${playNotice()}${homeHint()}
-  ${BOARD.on ? `${BOARD.named ? '' : boardNameHTML('title')}<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button></div>` : ''}`;
+  ${BOARD.on ? '<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button></div>' : ''}`;
 }
 // On the standalone copy in an iPad's browser: how to put it on the home screen, where it opens full screen like an app
 const asApp = () => navigator.standalone === true || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
