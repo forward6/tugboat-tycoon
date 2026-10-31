@@ -19,6 +19,7 @@ const PLAN = (() => {
     fishOpen: { hull: 'tug', drag: .2, fb: [.36, .32, .62], prop: true },
     fishEnclosed: { hull: 'tug', drag: .18, fb: [.35, .32, .65], prop: true },
     skiff: { hull: 'skiff', drag: 0, fb: [1.45, 1.15, 1.6] },
+    alligator: { hull: 'scow', drag: 0, fb: [.62, .55, .8] },
     schooner: { hull: 'schooner', drag: .12, fb: [.5, .38, .72], full: [.3, .62] },
     steambarge: { hull: 'ship', drag: 0, fb: [.48, .36, .62], full: [.22, .76], prop: true },
     laker: { hull: 'ship', drag: 0, fb: [.42, .38, .58], full: [.12, .88], prop: true },
@@ -33,10 +34,12 @@ const PLAN = (() => {
     const xp = xr + (K.prop ? Math.max(2.2, T * .38) : 0), xl = L * (fam === 'ship' ? .5 : .38);
     const [Ds, Dm, Db] = K.fb.map(f => T + f * T);
     const D = x => x < xl ? Dm + (Ds - Dm) * ((xl - x) / xl) ** 2 : Dm + (Db - Dm) * ((x - xl) / (L - xl)) ** (fam === 'ship' ? 2.4 : 1.7);
-    const yk = fam === 'skiff' ? (x => .9 * T * ((2 * x / L - 1) ** 6)) : fam === 'ship' ? (() => 0)
+    const yk = fam === 'scow' ? (x => x < L * .16 ? T * .8 * ((L * .16 - x) / (L * .16)) ** 1.5 : x > L * .78 ? T * 1.12 * ((x - L * .78) / (L * .22)) ** 1.35 : 0)
+      : fam === 'skiff' ? (x => .9 * T * ((2 * x / L - 1) ** 6)) : fam === 'ship' ? (() => 0)
       : (x => x <= xp ? 0 : x >= L * .86 ? drag : drag * (x - xp) / (L * .86 - xp));
     const rS = L * (fam === 'ship' ? .035 : .09);
     const hb = x => {
+      if (fam === 'scow') return B / 2 * (x < L * .1 ? .8 + .2 * Math.sqrt(Math.max(0, x / (L * .1))) : x > L * .84 ? .6 + .4 * Math.sqrt(Math.max(0, (L - x) / (L * .16))) : 1);
       if (fam === 'skiff') { const t = x / L; return B / 2 * Math.pow(Math.max(0, 1 - Math.abs(2 * t - 1.04) ** 2.3), .72); }
       let body;
       if (K.full) { const [a, f] = K.full.map(v => v * L);
@@ -78,6 +81,8 @@ const PLAN = (() => {
       hull = P([[0, Ds - .1 * T], ...sheer, [L, Db], [L - .006 * L, T * .3]]) + `Q${f1(px(L - .008 * L))},${f1(py(0))} ${f1(px(L - .04 * L))},${f1(py(0))}`
         + P([[xp, 0], [xr - .2, 0], [xr - .2, .06 * T], [xr, .08 * T], [xr, T * 1.02]]).replace('M', 'L')
         + `Q${f1(px(xr * .3))},${f1(py(T * 1.04))} ${f1(px(0))},${f1(py(Ds - .1 * T))}Z`;
+    } else if (fam === 'scow') {
+      hull = P([[0, Ds], ...sheer, [L, Db], ...range(L, 0, 80).map(x => [x, yk(x)])]) + 'Z';
     } else if (fam === 'schooner') {
       hull = P([[0, Ds - .12 * T], ...sheer, [L, Db]]) + `Q${f1(px(L - .005 * L))},${f1(py(T * .55))} ${f1(px(L - .045 * L))},${f1(py(T * .2))}`
         + `Q${f1(px(L - .08 * L))},${f1(py(drag))} ${f1(px(L * .86))},${f1(py(drag))}` + P([[xr + .012 * L, 0], [xr, T * .98]]).replace('M', 'L')
@@ -140,6 +145,7 @@ const PLAN = (() => {
       const ss = Math.min(300 / (B + 3), (Yb - 160) / (dk + hh + 3), s * 3), cx = 1320, sy = y => Yb - y * ss, sx = z => cx + z * ss, Q = (z, y) => `${f1(sx(z))},${f1(sy(y))}`;
       let sec;
       if (fam === 'tug') sec = `M${Q(-.06 * T, -.08 * T)}L${Q(.06 * T, -.08 * T)}L${Q(.06 * T, 0)}L${Q(b * .45, .06 * T)}Q${Q(b - .1, .1 * T)} ${Q(b - .1, .45 * T)}L${Q(b, dk)}Q${Q(0, dk + .08 * T)} ${Q(-b, dk)}L${Q(-b + .1, .45 * T)}Q${Q(-b + .1, .1 * T)} ${Q(-b * .45, .06 * T)}L${Q(-.06 * T, 0)}Z`;
+      else if (fam === 'scow') { const r = B * .06; sec = `M${Q(-b, dk)}L${Q(-b, r)}Q${Q(-b, 0)} ${Q(-b + r, 0)}L${Q(b - r, 0)}Q${Q(b, 0)} ${Q(b, r)}L${Q(b, dk)}L${Q(-b, dk)}Z`; }
       else if (fam === 'ship') { const r = B * (o.wood ? .2 : .1); sec = `M${Q(-b, dk)}L${Q(-b, r)}Q${Q(-b, 0)} ${Q(-b + r, 0)}L${Q(b - r, 0)}Q${Q(b, 0)} ${Q(b, r)}L${Q(b, dk)}Q${Q(0, dk + B * .02)} ${Q(-b, dk)}Z`; }
       else if (fam === 'schooner') { const r = B * .22; sec = `M${Q(-.5, -.6)}L${Q(.5, -.6)}L${Q(.5, 0)}L${Q(b - r, .15)}Q${Q(b, .3)} ${Q(b, r)}L${Q(b, dk)}Q${Q(0, dk + B * .025)} ${Q(-b, dk)}L${Q(-b, r)}Q${Q(-b, .3)} ${Q(-b + r, .15)}L${Q(-.5, 0)}Z`; }
       else { // lapstrake: six planks a side, each lapped outside the one below
@@ -538,7 +544,7 @@ const PLAN = (() => {
       ext: g => [g.L * .03, g.L * .03],
       secH: () => 9,
       draw(k) {
-        const { L, B, T, D, P, Pp, rect, rectP, area, line, dash, hidC, lab, range, hb, C, yk } = k;
+        const { L, B, T, D, P, Pp, rect, rectP, area, line, dash, hidC, lab, range, hb, C, yk, o } = k;
         // forecastle and pilot house forward, engine house aft, the deck load of lumber between
         const fo = house(k, .9, .995, 7, { windows: false, doors: [] }), ptop = pilotHouse(k, .905, .975, fo + .35, 8, { windows: 4 });
         lights(k, L * .94, ptop + .4, 4); lab('A', 'Pilot house', L * .94, ptop - 3);
@@ -557,13 +563,62 @@ const PLAN = (() => {
         const b0 = L * .1, b1 = L * .2; dash(rect(b0, 1.5, b1, D(b0) - .8)); dash(P([[L * .14, D(b0) - .8], [L * .14, aft]]));
         const e0 = L * .045, e1 = L * .095, ec = T * .4; dash(rect(e0, ec + 1, e1, aft - 1)); hidC((e0 + e1) / 2, ec, .1 * T); shaft(k, (e0 + e1) / 2, ec);
         dash(rect(L * .22, 1, L * .88, D(L * .5) - .6));
-        lab('B', 'Firebox boilers', (b0 + b1) / 2, T * .4, 1); lab('B', 'Compound engine', (e0 + e1) / 2, ec + 1.5, 1); lab('B', 'Hold', L * .55, T * .5, 1);
+        lab('B', o.boilerLabel || 'Firebox boilers', (b0 + b1) / 2, T * .4, 1); lab('B', o.engine || 'Compound engine', (e0 + e1) / 2, ec + 1.5, 1); lab('B', 'Hold', L * .55, T * .5, 1);
         fillHull(k, .9, .995, 1, C.tint); area(rectP(L * .905, -B * .2, L * .975, B * .2), C.paper, 1.2);
         fillHull(k, .02, .2, 3, C.tint); k.circP(L * .14, 0, 2.25, C.smoke);
         fillHull(k, lx0 / L, lx1 / L, 1.2, C.lumber, 1.1); for (let x = lx0 + 12; x < lx1; x += 12) line(Pp([[x, -hb(x) + 1.2], [x, hb(x) - 1.2]]), .5, C.ink2);
         for (const f of [.86, .5]) k.circP(L * f, 0, .8, C.tint, 1.2);
       },
       sec(k, { Q, b, dk }) { const { area, line, C } = k; area(`M${Q(-b + 1.2, dk)}L${Q(-b + 1.2, dk + 9)}L${Q(b - 1.2, dk + 9)}L${Q(b - 1.2, dk)}Z`, C.lumber, 1.2); for (let y = 1.5; y < 9; y += 1.5) line(`M${Q(-b + 1.2, dk + y)}L${Q(b - 1.2, dk + y)}`, .5, C.ink2); },
+    },
+    // ---------- the alligator: a steam scow with side paddle wheels, a cable winch forward and runners under her ----------
+    alligator: {
+      top: g => g.D(g.L * .5) + 17,
+      ext: g => [g.L * .06, g.L * .24],
+      secH: () => 6.8,
+      profileName: 'Outboard profile, starboard side', planName: 'Deck plan',
+      draw(k) {
+        const { L, B, T, D, P, Pp, rect, rectP, area, line, dash, lab, range, hb, C, yk, px, py } = k;
+        // the runners she hauls herself overland on
+        line(P(range(L * .1, L * .86, 30).map(x => [x, yk(x) - .22])), 3.2, C.rope); lab('B', 'Oak runners, for hauling over the portages', L * .5, -.2, 1);
+        // the cabin over the boiler and engine, the stack through its roof
+        const roof = house(k, .2, .64, 6.4, { doors: [.12, .85], spacing: 3.2 });
+        const st = stack(k, .44, 1.3, roof + .35, D(L * .44) + 16, { whistle: true, rake: .02 }); lab('A', 'Stack', st.x, st.top + .3);
+        // the starboard paddle wheel in its box
+        const wx = L * .5, wy = D(wx) - .4, wr = 3.3;
+        area(`M${px(wx - wr - .5)},${py(D(wx))}A${(wr + .5) * k.s},${(wr + .5) * k.s} 0 0 1 ${px(wx + wr + .5)},${py(D(wx))}Z`, C.tint, 1.3);
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI; line(P([[wx, wy], [wx + Math.cos(a) * wr, wy + Math.sin(a) * wr]]), .7, C.ink2); }
+        lab('A', 'Paddle box', wx, D(wx) + wr + .4);
+        // the winch forward: a big drum of steel cable, run out over a roller at the bow to the anchor ahead
+        const dx = L * .76, dy = D(dx) + 2.1;
+        area(rect(dx - 1.9, D(dx), dx + 1.9, D(dx) + .5), C.tint, 1); k.circ(dx, dy, 1.5, C.paper, 1.3); k.circ(dx, dy, .5, C.ink, .8);
+        for (const x of [dx - 1.7, dx + 1.7]) line(P([[x, D(dx) + .5], [dx, dy]]), 1);
+        lab('A', 'Winch: half a mile of steel cable', dx, dy + 1.5);
+        const bx = L * .985, by = k.Db + .4; k.circ(bx - .5, by, .45, C.tint, .9); lab('A', 'Bow roller', bx - .5, by + .4);
+        const ax = L + L * .2, ay = T * .2;
+        line(P([[dx + .9, dy + 1.2], [bx - .5, by + .45], [ax - 1.2, ay + 1.4]]), 1.1, C.rope);
+        anchor(k, ax, ay, 1.6); lab('B', 'Anchor, run out ahead and winched up to', ax, ay, 1);
+        // a lantern, the flagstaff, the boom chain aft
+        lights(k, L * .66, roof + .35, 3.2, 1);
+        line(P([[L * .02, D(L * .02)], [L * .01, D(L * .02) + 6]]), 1.1);
+        const tx = L * .06; area(rect(tx - .5, D(tx), tx + .5, D(tx) + 1.6), C.tint, 1); lab('A', 'Towing post for the boom', tx, D(tx) + 1.6);
+        // inside: the upright boiler and the engine
+        dash(rect(L * .36, .4, L * .44, roof - .8)); lab('B', 'Upright boiler', L * .4, T * .5, 1);
+        dash(rect(L * .5, .6, L * .6, D(L * .55) + 3.5)); lab('B', k.d.engineLabel || 'Engine', L * .55, T * .7, 1);
+        dash(rect(L * .22, .5, L * .34, D(L * .3) - .3)); lab('B', 'Cordwood', L * .28, T * .45, 1);
+        // the deck plan: paddle boxes out on either side, the cabin, the winch, the stack
+        for (const sg of [-1, 1]) area(rectP(wx - wr - .5, sg * (B / 2), wx + wr + .5, sg * (B / 2 + 1.6)), C.tint, 1.2);
+        area(rectP(L * .2, -(B / 2 - .6), L * .64, B / 2 - .6), C.tint, 1.3);
+        k.circP(L * .44, 0, .65, C.smoke);
+        area(rectP(dx - .8, -B * .32, dx + .8, B * .32), C.paper, 1.2); line(Pp([[dx, -B * .32], [dx, B * .32]]), 2.2);
+        line(Pp([[dx + .8, 0], [L - .3, 0], [L + L * .2 - 1.2, 0]]), 1.1, C.rope);
+      },
+      sec(k, { Q, b, dk }) {
+        const { area, line, C } = k;
+        area(`M${Q(-b + .6, dk)}L${Q(-b + .6, dk + 6.4)}L${Q(b - .6, dk + 6.4)}L${Q(b - .6, dk)}Z`, C.paper, 1.3);
+        for (const sg of [-1, 1]) area(`M${Q(sg * b, dk - .4)}L${Q(sg * (b + 1.6), dk - .4)}L${Q(sg * (b + 1.6), dk + 2.6)}L${Q(sg * b, dk + 2.6)}Z`, C.tint, 1.1);
+        line(`M${Q(-b + .2, -.22)}L${Q(-b + 1.2, -.22)}M${Q(b - 1.2, -.22)}L${Q(b - .2, -.22)}`, 3, C.rope);
+      },
     },
     // ---------- the steel freighters: lakers and canallers ----------
     laker: {
@@ -627,6 +682,10 @@ const PLAN = (() => {
   const BOATS = {
     woodsimple: ['tug', { fuel: 'Cordwood', engine: 'Engine: one cylinder' }],
     woodcompound: ['tug', { onHouse: 1, stackH: 22, cylinders: 2, engine: 'Steeple compound engine' }],
+    woodrefit: ['tug', { fuel: 'Coal', cylinders: 2, engine: 'Fore-and-aft compound engine' }],
+    woodwrecker: ['wrecker', { onHouse: 1, stackH: 22, boilerLabel: 'Firebox boiler', engine: 'High-pressure engine', derrick: 1, pumps: 1, yawls: 1 }],
+    hooker: ['steambarge', { wood: 1, boilerLabel: 'Firebox boilers', engine: 'Steeple compound engine' }],
+    alligator: ['alligator', { engine: 'Engine: paddles and winch' }],
     steelcompound: ['tug', { onHouse: 1, steel: 1, scotch: 1, stackH: 20, cylinders: 2, boilerLabel: 'Scotch boiler', engine: 'Fore-and-aft compound engine' }],
     steelwrecker: ['wrecker', { onHouse: 1, steel: 1, scotch: 1, boilers: 2, stackH: 24, cylinders: 3, boilerLabel: 'Two Scotch boilers', engine: 'Triple-expansion engine', derrick: 1, pumps: 1, searchlight: 1, yawls: 1 }],
     diesel: ['diesel', { steel: 1, engine: 'Enterprise diesel engine' }],

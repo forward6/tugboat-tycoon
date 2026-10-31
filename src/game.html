@@ -263,6 +263,8 @@ table.cargo td.n{text-align:right}
 .tl-card h4{margin:0;font-family:var(--font-display);font-weight:400;font-size:21px;line-height:1.15}
 .tl-card p{margin:0}
 .tl-card .soon{font-size:12.5px;color:var(--magenta);font-weight:700}
+.riverpick{display:flex;flex-direction:column;gap:3px;grid-column:1/-1}
+.riverpick select{font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
 .bids{list-style:none;margin:0;padding:0}
 .bids li{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px solid var(--rule);font-size:15px}
 .bids li span{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -454,7 +456,7 @@ const CARGO_IDS = Object.keys(CARGO);
 // `to` is the last year a model is offered; boats already afloat keep working.
 // Specs follow a real boat of each type (`like`). Figures marked "about" are typical where the records give none.
 const MODELS = {
-  woodsimple:    { kind: 'tow', name: 'Wooden tug, simple engine', year: 1870, to: 1889, price: 6000, power: 3, kn: 9, raftKn: 1.2, op: 12, risk: 1.35,
+  woodsimple:    { kind: 'tow', refitTo: 'woodrefit', name: 'Wooden tug, simple engine', year: 1870, to: 1889, price: 6000, power: 3, kn: 9, raftKn: 1.2, op: 12, risk: 1.35,
                    spec: { like: 'the Collingwood (St. Catharines, 1874), a Georgian Bay lumber tug', engine: 'High-pressure single-cylinder, non-condensing', cyl: '16 × 18 in.', hp: 'about 50 hp', rpm: 'about 130 rpm',
                      boiler: 'Firebox boiler, burning cordwood', len: 61, beam: 15.4, draft: 7, crew: '4' },
                    blurb: 'A small wooden steam tug. Her one cylinder exhausts straight up the stack, which is why you hear her coming. Cheap to build, thirsty to run, tender in a big sea.' },
@@ -462,14 +464,30 @@ const MODELS = {
                    spec: { like: 'the Winslow of Bay City, which towed Georgian Bay log rafts to the Saginaw mills', engine: 'Steeple compound: the high- and low-pressure cylinders stacked one above the other', cyl: '22 & 40 × 30 in.', hp: '375 hp', rpm: '84 rpm',
                      boiler: 'Firebox boiler, coal', len: 120, beam: 19, draft: 9.5, crew: 'about 11' },
                    blurb: 'A big wooden tug whose compound engine uses its steam twice. Tows more and burns less coal per load. Big enough for salvage, and for the rafts of four million feet that crossed the lake.' },
+  hooker:        { kind: 'tow', hooker: true, deckLoad: 4, name: 'Lumber hooker, with her barges', year: 1873, to: 1905, price: 13000, power: 8, kn: 8, raftKn: 0, op: 14, risk: 1.2,
+                   spec: { like: 'the W. L. Wetmore (Cleveland, 1871), which carried Parry Sound lumber with her barges Brunette and James C. King until all three were wrecked near Tobermory in 1901', engine: 'Steeple compound', hp: 'about 400 hp', rpm: 'about 80 rpm',
+                     boiler: 'Firebox boilers, coal', len: 160, beam: 30, draft: 11, crew: 'about 14, and three or four on each barge', about: true },
+                   blurb: 'A wooden steamer built to carry lumber: a deck load stacked high, more in her hold, and old schooners cut down to barges on a line astern. She carries far more than a tug can tow, but she is slow, and she takes no tows, salvage or log booms.' },
+  woodwrecker:   { kind: 'tow', wreck: true, name: 'Wooden wrecking tug', year: 1874, to: 1905, price: 9500, power: 4, kn: 9.5, raftKn: 1.3, op: 15, risk: 1.15,
+                   spec: { like: 'the Erie Belle (Cleveland, 1862), a wrecking tug whose boiler blew up off Kincardine in 1883 as she worked to free a stranded schooner', engine: 'High-pressure engine', hp: 'about 150 hp', rpm: 'about 100 rpm',
+                     boiler: 'Firebox boiler, coal', len: 117, beam: 20, draft: 9.5, crew: '12', aboutDraft: true },
+                   blurb: 'A wooden tug fitted out for wreck work: steam pumps, a derrick, heavy hawsers and a diver\'s outfit. She can take on any salvage whatever her engine, and her pumps and divers save more of a wreck, so salvage pays her a quarter more.' },
+  woodrefit:     { kind: 'tow', refit: 'woodsimple', name: 'Wooden tug, compound refit', year: 1880, price: 8500, power: 4, kn: 9.5, raftKn: 1.4, op: 11, risk: 1.3,
+                   spec: { like: 'the Saucy Jim (1887) of Penetanguishene, a small wooden tug with a fore-and-aft compound engine by David Bell of Buffalo', engine: 'Fore-and-aft compound: high- and low-pressure cylinders in line', cyl: '14⅜ & 24 × 16 in.', hp: 'about 200 hp', rpm: 'about 130 rpm',
+                     boiler: 'New firebox boiler, coal', len: 61, beam: 15.4, draft: 7, crew: '4' },
+                   blurb: 'A simple-engine tug given a compound engine and a new coal-fired boiler at the yard. She tows more, a little faster, on less fuel.' },
+  alligator:     { kind: 'tow', warp: true, name: 'Alligator warping tug', year: 1889, to: 1932, price: 2800, power: 0, kn: 3, raftKn: 0, op: 4, risk: 0,
+                   spec: { like: 'the West & Peachey alligators of Simcoe, Ontario: some 200 built from 1889', engine: 'Steam engine driving two side paddle wheels and a cable winch', hp: '20 hp', rpm: 'about 200 rpm',
+                     boiler: 'Upright firebox boiler, cordwood', len: 43, beam: 9, draft: 3, crew: '4 to 6', about: true },
+                   blurb: 'A flat-bottomed steam scow with paddle wheels and a winch holding half a mile of steel cable. She runs her anchor out ahead, winches a log boom up to it, and does it again, across lakes no tug can reach, and winches herself over the portages on her own runners. Shipped by rail to a river, she brings the lumbermen\'s logs down to its mouth.' },
   steelcompound: { kind: 'tow', name: 'Steel tug, fore-and-aft compound', year: 1891, to: 1935, price: 17000, power: 6, kn: 11, raftKn: 1.8, op: 17, risk: .75,
                    spec: { like: 'the James Whalen (Bertram Engine Works, Toronto, 1905)', engine: 'Fore-and-aft compound: the two cylinders in line, fore and aft', cyl: '20 & 40 × 36 in.', hp: 'about 900 ihp', rpm: 'about 110 rpm',
                      boiler: 'Scotch marine boilers at 156 psi, coal', len: 108, beam: 24, draft: 12, crew: 'about 9' },
                    blurb: 'A steel hull, a Scotch boiler and the fore-and-aft compound engine that became the standard Great Lakes tug. Built to last half a century.' },
-  steelwrecker:  { kind: 'tow', name: 'Steel wrecking tug, triple expansion', year: 1902, to: 1935, price: 26000, power: 9, kn: 14, raftKn: 2.2, op: 25, risk: .55,
+  steelwrecker:  { kind: 'tow', wreck: true, name: 'Steel wrecking tug, triple expansion', year: 1902, to: 1935, price: 26000, power: 9, kn: 14, raftKn: 2.2, op: 25, risk: .55,
                    spec: { like: 'the Favorite (Buffalo Dry Dock Co., 1907), the Great Lakes Towing Co. wrecker', engine: 'Vertical triple expansion: the steam is used three times', hp: '1,200 hp', rpm: 'about 120 rpm',
                      boiler: 'Two Scotch boilers, coal', len: 181, beam: 43, draft: 17, crew: 'about 20' },
-                   blurb: 'A big steel tug with derricks, pumps and a triple-expansion engine, built to pull steamers off the reefs and drag the largest rafts. Beck\'s Wahnapitae, built at Penetang in 1905, was a smaller triple-expansion tug of the same kind.' },
+                   blurb: 'A big steel tug with derricks, pumps and a triple-expansion engine, built to pull steamers off the reefs and drag the largest rafts. Salvage pays her a quarter more. Beck\'s Wahnapitae, built at Penetang in 1905, was a smaller triple-expansion tug of the same kind.' },
   diesel:        { kind: 'tow', name: 'Diesel tug', year: 1936, price: 30000, power: 9, kn: 11, raftKn: 2.2, op: 15, risk: .5,
                    spec: { like: 'the Glen-class tugs built at Owen Sound by Russel Brothers, 1943–45', engine: 'Enterprise diesel', hp: '400 hp', rpm: 'about 325 rpm',
                      boiler: 'No boiler: burns fuel oil', len: 80, beam: 20, draft: 9 + 8 / 12, crew: 'berths for 12' },
@@ -496,7 +514,7 @@ const MODELS = {
                    blurb: 'An all-steel, fully enclosed fish tug with an oil engine and a powered lifter. Fishes through weather that keeps an open boat in port. After the war, Russel Brothers of Owen Sound built steel fish tugs with Cummins diesels.' },
 };
 const OLD_MODELS = { harbour: 'woodsimple', compound: 'woodcompound', steel: 'steelcompound', fish: 'steamfish', lifter: 'liftertug' };
-const forSale = (m, y) => y >= m.year && (!m.to || y <= m.to);
+const forSale = (m, y) => !m.refit && y >= m.year && (!m.to || y <= m.to);
 
 const SPECIES = { whitefish: { name: 'Whitefish', price: 90 }, trout: { name: 'Lake trout', price: 70 }, herring: { name: 'Herring', price: 28 } };
 
@@ -660,6 +678,18 @@ const EVENTS = [
     body: 'The Midland Railway has opened to its new terminus at Midland, and the Northern Railway reaches Penetanguishene.',
     effect: ['The Midland and Penetanguishene mills want far more logs.', 'Midland ships supplies and buys coal.'] },
   { id: 'tariff', date: [1879, 3, 20], head: 'New duty on coal', body: "Ottawa's National Policy puts a duty on imported coal.", effect: ['Coal freight pays 10% more.'] },
+  { id: 'hooker', date: [1873, 4, 1], head: 'Lumber hookers on the bay',
+    body: 'Steam barges built to carry lumber, a deck load stacked high and old schooners on a line astern as barges, are taking Georgian Bay lumber down the lakes.',
+    effect: ['New boat for sale: Lumber hooker, with her barges.'] },
+  { id: 'woodwrecker', date: [1874, 5, 1], head: 'Wrecking tugs',
+    body: 'The yards are fitting out wooden tugs for wreck work, with steam pumps, a derrick, heavy hawsers and a diver\'s outfit.',
+    effect: ['New boat for sale: Wooden wrecking tug. She takes on any salvage and earns a quarter more for it.'] },
+  { id: 'refit', date: [1880, 4, 1], head: 'Compound engines for old tugs',
+    body: 'The shipyards will take out a tug\'s old single-cylinder engine and fit a compound engine and a coal-fired boiler.',
+    effect: ['A simple-engine tug can now be refitted with a compound engine: see her page.'] },
+  { id: 'alligator', date: [1889, 4, 1], head: 'The alligator',
+    body: 'West & Peachey of Simcoe have built a steam warping tug that can winch a log boom across a lake and winch herself over the portages to the next one. The lumbermen call it the alligator.',
+    effect: ['New boat for sale: Alligator warping tug, shipped by rail to a river above the bay.'] },
   { id: 'steamfish', date: [1874, 4, 1], head: 'Steam comes to the fishery',
     body: 'The first steam fish tugs are working out of Georgian Bay ports. A steam tug and six men can fish many times the net of a sailing skiff.',
     effect: ['New boat for sale: Steam fish tug.'] },
@@ -1639,6 +1669,9 @@ const galeSoon = () => S.weather.warn;
    Boats
    ===================================================================== */
 const isFish = t => MODELS[t.model].kind === 'fish';
+const isWarp = t => !!MODELS[t.model].warp;
+// which tows and salvage a boat can take: an alligator and a lumber hooker take none; a wrecking tug takes any salvage
+const canTake = (t, j) => { const m = MODELS[t.model]; return !m.warp && !m.hooker && (m.power >= j.minPower || (!!m.wreck && j.kind === 'salvage')); };
 const towLoads = t => t.tow.reduce((s, g) => s + g.n, 0);
 // Speeds in km a day. Masters ran by daylight among the islands, about 14 hours steaming;
 // a big log raft crept along at a knot or two, day and night.
@@ -1647,7 +1680,7 @@ function tugSpeed(t) {
   const m = MODELS[t.model];
   let v = m.kn * KNOT * STEAM_HOURS;
   if (t.boom) v = m.raftKn * KNOT * 24;
-  else if (t.tow.length) v *= 1 - .4 * Math.min(1, towLoads(t) / m.power);
+  else if (t.tow.length) v *= 1 - (m.hooker ? .22 : .4) * Math.min(1, towLoads(t) / m.power);
   if (t.jobTow) v = Math.min(v, 5.5 * KNOT * STEAM_HOURS);
   const k = S.weather.today.k;
   if (m.sail) v *= { calm: .3, moderate: 1, fresh: 1.15, gale: .5, fog: .6 }[k];
@@ -1721,6 +1754,7 @@ function nextGoal(t) {
   return t.owner === 'r' && t.station && t.at !== t.station && portOpen(t.station) ? { t: 'port', id: t.station } : null;
 }
 function onTimer(t) {
+  if (isWarp(t)) { t.state = 'warp'; return; }
   if (t.state === 'wait') {
     if (!canSail(t)) { t.timer = .25; return; }
     const g = t.resumeGoal || nextGoal(t); t.resumeGoal = null; t.note = '';
@@ -1759,6 +1793,83 @@ function arrive(t) {
   if (g.t === 'job') { claimJob(t, g.id); return; }
 }
 
+/* ---------- the alligator: shipped by rail to a river, she warps the lumbermen's booms down to its mouth ----------
+   About one boom a week, paid for by the lumbermen; the logs come down to the port at the mouth for the tugs to carry.
+   Fewer logs come down as the pine runs out. She is upriver, out of reach of the bay's gales. */
+const WARP_RIVERS = { byng: 'the Magnetawan', french: 'the French River', spanish: 'the Spanish River', moonriver: 'the Moon River', parrysound: 'the Seguin', waubaushene: 'the Sturgeon and Coldwater rivers' };
+const warpRivers = () => Object.keys(WARP_RIVERS).filter(id => PORT[id] && portOpen(id) && supplyRate(id, 'logs') > 0);
+const WARP_FEE = 70, WARP_LOGS = 7, WARP_DAYS = 7, WARP_MOVE = 150;
+// Where she shows on the map: a few km up her river where the map has it (the Magnetawan, the French, the Spanish),
+// heading upstream with her boom astern; otherwise at the river's mouth by the port
+const warpSpots = {};
+function warpSpot(pid) {
+  if (warpSpots[pid]) return warpSpots[pid];
+  const q = nodePos('p:' + pid); let best = null;
+  for (const rv of MAP.rivers) rv.pts.forEach((pt, i) => { const d = Math.hypot(pt[0] - q[0], pt[1] - q[1]); if (!best || d < best.d) best = { d, pts: rv.pts, i }; });
+  let spot = [q[0] + .25, q[1] - .25, -Math.PI / 2];
+  if (best && best.d < 8) {
+    const { pts } = best, n = pts.length, far = j => Math.hypot(pts[j][0] - q[0], pts[j][1] - q[1]);
+    const dir = best.i < 2 ? 1 : best.i > n - 3 ? -1 : far(Math.min(n - 1, best.i + 3)) > far(Math.max(0, best.i - 3)) ? 1 : -1;
+    let i = best.i, x = pts[i][0], y = pts[i][1], left = 3.5, hd = 0;
+    while (left > 0 && i + dir >= 0 && i + dir < n) {
+      const [nx, ny] = pts[i + dir], L = Math.hypot(nx - x, ny - y); hd = Math.atan2(ny - y, nx - x);
+      if (L >= left) { x += (nx - x) / L * left; y += (ny - y) / L * left; left = 0; } else { x = nx; y = ny; left -= L; i += dir; }
+    }
+    spot = [x, y, hd];
+  }
+  return warpSpots[pid] = spot;
+}
+const warpPlace = (t, pid) => { const [x, y, hd] = warpSpot(pid); t.x = x; t.y = y; t.hd = t.vhd = hd; };
+// "the Magnetawan above Byng Inlet", or "the French River" where the port shares the river's name
+const riverWhere = pid => { const r = WARP_RIVERS[pid] || 'the river', n = PORT[pid].name; return r.includes(n) ? r : `${r} above ${n}`; };
+function warpDay(day) {
+  for (const t of S.tugs) {
+    if (!isWarp(t) || t.owner !== 'p' || !S.season || t.state === 'laid') continue;
+    if (t.warpReady && day < t.warpReady) continue;
+    t.warpReady = null;
+    t.warpN = (t.warpN || 0) + 1;
+    if (t.warpN < WARP_DAYS) continue;
+    t.warpN = 0;
+    const pid = t.river || t.at, logs = WARP_LOGS * pineLeft(day), P = S.ports[pid];
+    P.stock.logs = (P.stock.logs || 0) + logs;
+    credit(t, WARP_FEE * (.6 + .4 * pineLeft(day)), 'logs', pid);
+    t.booms = (t.booms || 0) + 1;
+  }
+}
+function warpMove(t, pid) {
+  if (!isWarp(t) || !WARP_RIVERS[pid] || pid === t.river || S.cash < WARP_MOVE) return false;
+  S.cash -= WARP_MOVE; S.ledger.running += WARP_MOVE;
+  t.river = pid; t.at = pid; t.station = null; warpPlace(t, pid); t.warpReady = S.day + 6; t.warpN = 0;
+  addNews(`The alligator ${t.name} has gone by rail to ${riverWhere(pid)}.`);
+  ui.panelDirty = true; return true;
+}
+/* ---------- the compound refit: from 1880 an old simple-engine tug can go to the yard for a compound engine ----------
+   In the season she steams to the nearest shipyard and spends about two weeks there; ordered in the winter, it is done
+   by spring. */
+const REFIT_COST = 2500, REFIT_DAYS = 15;
+const canRefit = t => t.owner === 'p' && MODELS[t.model].refitTo && yearOf(S.day) >= MODELS[MODELS[t.model].refitTo].year;
+function orderRefit(t) {
+  if (!canRefit(t) || t.refit || S.cash < REFIT_COST || t.jobTow) return false;
+  S.cash -= REFIT_COST; S.ledger.capital += REFIT_COST;
+  if (!S.season) { t.refit = { winter: true }; addNews(`${t.name} is getting a compound engine over the winter.`); ui.panelDirty = true; return true; }
+  const yard = nearestPort(t.x, t.y, p => p.shipyard);
+  t.refit = { yard }; t.job = null; t.resumeGoal = null; t.note = ''; t.layup = yard;
+  if (t.at === yard && t.state !== 'sail') layUp(t); else setCourse(t, { t: 'port', id: yard });
+  addNews(`${t.name} is bound for the yard at ${PORT[yard].name} for a compound engine.`);
+  ui.panelDirty = true; return true;
+}
+function finishRefit(t) {
+  const to = MODELS[t.model].refitTo; if (!to) return;
+  t.model = to; t.price += REFIT_COST * .8; t.refit = null;
+  addNews(`${t.name} is out of the yard with her new compound engine.`);
+  if (t.owner === 'p') toast(`${t.name} has her compound engine.`);
+  if (S.season && t.state === 'laid') fitOut(t);
+  ui.panelDirty = true;
+}
+function refitDay(day) {
+  for (const t of S.tugs) if (t.refit && t.refit.done && day >= t.refit.done) finishRefit(t);
+}
+
 /* ---------- laying up: tie her up and pay off the crew until spring, or until you fit her out ---------- */
 const LAID_COST = .15;
 const layupPort = t => (isFish(t) && t.home) || t.at || nearestPort(t.x, t.y);
@@ -1777,11 +1888,12 @@ function layUp(t) {
     t.tow = t.tow.filter(g => g.n > .01); if (!t.tow.length) t.boom = false;
   }
   t.nets = null; t.state = 'laid'; t.path = null; t.goal = null; t.layup = pid; t.note = '';
+  if (t.refit && t.refit.yard === pid && !t.refit.done) { t.refit.done = S.day + REFIT_DAYS; ui.panelDirty = true; return; }
   addNews(`${t.name} is laid up at ${PORT[pid].name}.`);
   ui.panelDirty = true;
 }
 function fitOut(t) {
-  if (!S.season || !t.layup) return false;
+  if (!S.season || !t.layup || (t.refit && !t.refit.winter)) return false;
   const laid = t.state === 'laid';
   t.layup = null;
   if (laid) { t.state = 'port'; t.timer = fitOutDays(t); } else setCourse(t, nextGoal(t));
@@ -1811,19 +1923,20 @@ function routeStop(t, pid) {
   for (const c of CARGO_IDS) {
     const stock = Math.floor(P.stock[c] || 0); if (stock < 1) continue;
     let best = 0; for (const s of later) best = Math.max(best, valueAt(t, s, c, pid));
-    if (best > 0) opts.push({ c, stock, v: best * (c === 'logs' ? 3 : 1) });
+    if (best > 0) opts.push({ c, stock, v: best * (c === 'logs' && !MODELS[t.model].hooker ? 3 : 1) });
   }
   opts.sort((a, b) => b.v - a.v);
   let loads = towLoads(t);
+  const hooker = !!MODELS[t.model].hooker;
   for (const o of opts) {
-    if (o.c === 'logs') {
+    if (o.c === 'logs' && !hooker) {
       if (t.tow.length && !t.boom) continue;
       const n = Math.min(cap * 3 - loads, o.stock);
       if (n >= 1) { addTow(t, 'logs', n, pid); t.boom = true; P.stock.logs -= n; loads += n; moved += n * .1; }
       break;
     }
     if (t.boom) continue;
-    const n = Math.min(cap - loads, o.stock); if (n < 1) break;
+    const room = cap + (o.c === 'lumber' ? MODELS[t.model].deckLoad || 0 : 0), n = Math.min(room - loads, o.stock); if (n < 1) { if (loads >= room) break; continue; }
     addTow(t, o.c, n, pid); P.stock[o.c] -= n; loads += n; moved += n;
     if (o.c === 'supplies') shipInland(pid, 'supplies', n, 'in');
   }
@@ -1962,7 +2075,7 @@ function contractsDay(day) {
   const mo = monthOf(day);
   if (S.season && mo >= 5 && mo <= 9 && offeredContracts().length < 2 && activeContracts().length < contractCap() && rand() < .012) {
     const k = makeOffer({ short: true });
-    if (k) { toast(`A contract offer from ${k.cust}`); addNews(`${k.cust[0].toUpperCase() + k.cust.slice(1)} want ${qtyText(k)} from ${runText(k)} within two months, at ${fmtPx(k.rate)} a ${k.c === 'fish' ? 'ton' : 'load'}.`); }
+    if (k) { toast(`A contract offer from ${k.cust}`); addNews(`${k.cust[0].toUpperCase() + k.cust.slice(1)} want ${qtyText(k)} ${k.from ? 'from ' + runText(k) : runText(k)} within two months, at ${fmtPx(k.rate)} a ${k.c === 'fish' ? 'ton' : 'load'}.`); }
   }
 }
 function contractsSeasonEnd() {
@@ -2194,7 +2307,7 @@ function shipTowedIn(j) {
 function maybeSalvageJob() { if (S.season && rand() < .55 && S.jobs.length < 4) spawnJob('salvage'); }
 function sendToJob(t, job) {
   if (t.jobTow || job.state !== 'open') return false;
-  if (MODELS[t.model].power < job.minPower) return false;
+  if (!canTake(t, job)) return false;
   if (!t.job && t.state !== 'idle') t.resumeGoal = null;
   t.job = job.id;
   setCourse(t, { t: 'job', id: job.id });
@@ -2220,8 +2333,9 @@ function finishJob(t) {
   const j = S.jobs.find(j => j.id === t.jobTow);
   t.jobTow = null;
   if (j) {
-    credit(t, j.reward, j.kind === 'salvage' ? 'salvage' : 'tows', j.dest);
-    if (t.owner === 'p') addNews(`${t.name} brought the ${j.kind === 'salvage' ? 'steamer' : 'schooner'} ${j.name} into ${PORT[j.dest].name} for ${money(j.reward)}.`);
+    const pay = j.reward * (j.kind === 'salvage' && MODELS[t.model].wreck ? 1.25 : 1);
+    credit(t, pay, j.kind === 'salvage' ? 'salvage' : 'tows', j.dest);
+    if (t.owner === 'p') addNews(`${t.name} brought the ${j.kind === 'salvage' ? 'steamer' : 'schooner'} ${j.name} into ${PORT[j.dest].name} for ${money(pay)}.`);
     shipTowedIn(j);
     S.jobs = S.jobs.filter(x => x !== j);
   }
@@ -2238,7 +2352,7 @@ function rivalDispatch() {
     if (j.state !== 'open' || j.rivalTug || S.day < j.rivalAt) continue;
     let best = null, bd = 1e9;
     for (const t of S.tugs) {
-      if (t.owner !== 'r' || t.job || t.jobTow || isFish(t) || MODELS[t.model].power < j.minPower || !(RIVAL[t.co] && (RIVAL[t.co].races || RIVAL[t.co].wreck)) || boardSeat(t.co)) continue;
+      if (t.owner !== 'r' || t.job || t.jobTow || isFish(t) || !canTake(t, j) || !(RIVAL[t.co] && (RIVAL[t.co].races || RIVAL[t.co].wreck)) || boardSeat(t.co)) continue;
       const d = Math.hypot(t.x - j.pos[0], t.y - j.pos[1]); if (d < bd) { bd = d; best = t; }
     }
     if (best && bd < (j.kind === 'salvage' && RIVAL[best.co].wreck ? 320 : 130) && rand() < .7) { j.rivalTug = best.id; sendToJob(best, j); }
@@ -2360,6 +2474,7 @@ function dailyTick() {
   S.effects = S.effects.filter(e => S.day <= e.until);
   rivalsDay(day);
   contractsDay(day);
+  warpDay(day); refitDay(day);
   marketDay(day);
   if (S.over) return;
   // notices
@@ -2437,6 +2552,7 @@ function endSeason() {
   queueModal(winterHTML);
 }
 function startSeason() {
+  for (const t of S.tugs) if (t.refit) finishRefit(t);
   const y = S.year + 1;
   if (y > (S.premiumUntil || 0)) S.premiumMult = 1;
   const open = dayOf(y, 4, 10) + Math.floor(rand() * 14);
@@ -2487,12 +2603,18 @@ function gameOver() {
 /* =====================================================================
    Player actions
    ===================================================================== */
-function buyTug(model, yard, name) {
+function buyTug(model, yard, name, river) {
   const m = MODELS[model];
   if (S.cash < m.price || !forSale(m, yearOf(S.day))) return;
+  if (m.warp && !(river && WARP_RIVERS[river])) return;
   S.cash -= m.price; S.ledger.capital += m.price;
-  const t = addTug(model, 'p', yard, name);
+  const t = addTug(model, 'p', m.warp ? river : yard, name);
   t.state = 'idle';
+  if (m.warp) {
+    t.river = river; warpPlace(t, river); t.state = S.season ? 'warp' : 'laid'; t.warpReady = S.day + 4;
+    addNews(`The alligator ${t.name}, built at Simcoe, has come by rail to ${riverWhere(river)}.`);
+    whistle('launch', 1, 0, [.5, .5, 1.2]); closeModal(); select({ t: 'tug', id: t.id }); ui.panelDirty = true; return;
+  }
   if (!S.season) t.state = 'laid';
   addNews(`The ${m.name.toLowerCase()} ${t.name} is launched at ${PORT[yard].name}.`);
   if (!m.sail) whistle(/diesel/.test(model) ? 'diesel' : 'launch', 1, 0, [.5, .5, 1.2]);
@@ -3893,8 +4015,10 @@ function drawTug(t, sx, sy, zr, now) {
   const hullCol = mine ? COL.player : (RIVAL[t.co] && RIVAL[t.co].color) || COL.rival;
   ctx.save(); ctx.translate(sx, sy); ctx.rotate(a); ctx.scale(f, f);
   // the tow, astern
-  const nT = towLoads(t), stern = fish ? -8.5 : -(m.power >= 6 ? 11.5 : 10);
-  if (t.boom && nT > 0) {
+  const nT = towLoads(t), stern = fish ? -8.5 : m.hooker ? -14 : m.warp ? -4.5 : -(m.power >= 6 ? 11.5 : 10);
+  if (m.hooker) drawHookerBarges(t, stern);
+  else if (m.warp) { if (S.season && t.state === 'warp' && !(t.warpReady && S.day < t.warpReady)) drawWarpBoom(stern, now); }
+  else if (t.boom && nT > 0) {
     const rad = Math.min(24, 6 + Math.sqrt(nT) * 3.4), off = stern - 6 - rad;
     ctx.strokeStyle = rgba(COL.ink, .65); ctx.lineWidth = .7; ctx.beginPath(); ctx.moveTo(stern, 0); ctx.lineTo(off + rad, 0); ctx.stroke();
     ctx.save(); ctx.beginPath(); ctx.ellipse(off, 0, rad, rad * .62, 0, 0, Math.PI * 2); ctx.fillStyle = rgba(COL.logs, .5); ctx.fill(); ctx.clip();
@@ -3920,6 +4044,8 @@ function drawTug(t, sx, sy, zr, now) {
   }
   if (m.sail) drawSkiffShape(hullCol, a);
   else if (fish) drawFishTugShape(t, m, hullCol, mine, a);
+  else if (m.warp) drawAlligatorShape(hullCol, mine, a);
+  else if (m.hooker) drawHookerShape(t, hullCol, mine, a);
   else drawTowTugShape(t, m, hullCol, mine, a, f);
   ctx.restore();
   if (t.state === 'wait' && t.owner === 'p') { ctx.font = `bold 11px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; halo('weatherbound', sx, sy + 9 * f, COL.warn); }
@@ -3971,7 +4097,71 @@ function drawTowTugShape(t, m, hullCol, mine, a = 0, f = 1) {
   drawStack(-L * .08, r, mine, diesel);
   ctx.fillStyle = '#2a2a2a'; ctx.beginPath(); ctx.arc(L * .6, 0, .45, 0, 7); ctx.fill();
   ctx.strokeStyle = '#e76f51'; ctx.lineWidth = .6; ctx.beginPath(); ctx.arc(-L * .2, B * .66, .6, 0, 7); ctx.stroke();
-  if (t.model === 'steelwrecker') { ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = .9; ctx.beginPath(); ctx.moveTo(-L * .6, 0); ctx.lineTo(-L * .15, -B * 1.3); ctx.stroke(); ctx.beginPath(); ctx.arc(-L * .6, 0, .9, 0, 7); ctx.fill(); }
+  if (m.wreck) { ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = .9; ctx.beginPath(); ctx.moveTo(-L * .6, 0); ctx.lineTo(-L * .15, -B * 1.3); ctx.stroke(); ctx.beginPath(); ctx.arc(-L * .6, 0, .9, 0, 7); ctx.fill(); }
+}
+// A deck or barge load, as seen from above: lumber in stacks, coal heaped, logs lying fore and aft, supplies in crates
+function deckLoad(c, x0, x1, w) {
+  const len = x1 - x0;
+  if (c === 'coal') { ctx.fillStyle = COL.coal; ctx.beginPath(); ctx.ellipse(x0 + len / 2, 0, len / 2, w, 0, 0, 7); ctx.fill(); return; }
+  if (c === 'logs') { ctx.fillStyle = COL.logs; ctx.fillRect(x0, -w, len, w * 2); ctx.strokeStyle = rgba('#3b2a1a', .45); ctx.lineWidth = .3; for (let y = -w + .6; y < w; y += 1) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); } return; }
+  if (c === 'lumber') { ctx.fillStyle = COL.lumber; ctx.fillRect(x0, -w, len, w * 2); ctx.strokeStyle = rgba(COL.ink, .35); ctx.lineWidth = .3; for (let x = x0 + 2; x < x1; x += 2.4) { ctx.beginPath(); ctx.moveTo(x, -w); ctx.lineTo(x, w); ctx.stroke(); } return; }
+  ctx.fillStyle = COL.roofC; for (let x = x0 + .3; x < x1 - 1; x += 2.2) for (const y of [-w * .9, .1]) ctx.fillRect(x, y, 1.8, w * .8);
+}
+// The lumber hooker: a long wooden steamer, her engine house and stack aft, pilot house forward, the deck load between
+function drawHookerShape(t, hullCol, mine, a = 0) {
+  const L = 14, B = 3.3, [lx, ly] = boatLight(a), dx = -lx * .8, dy = -ly * .8;
+  const hull = () => { ctx.beginPath(); ctx.moveTo(L, 0); ctx.quadraticCurveTo(L * .8, -B, L * .45, -B); ctx.lineTo(-L * .8, -B); ctx.quadraticCurveTo(-L * 1.02, -B * .9, -L, 0); ctx.quadraticCurveTo(-L * 1.02, B * .9, -L * .8, B); ctx.lineTo(L * .45, B); ctx.quadraticCurveTo(L * .8, B, L, 0); ctx.closePath(); };
+  hull(); ctx.fillStyle = shadeHull(hullCol, B, ly); ctx.fill(); ctx.strokeStyle = '#4a3626'; ctx.lineWidth = .9; ctx.stroke();
+  ctx.save(); ctx.scale(.9, .78); hull(); ctx.fillStyle = COL.wood; ctx.fill(); ctx.restore();
+  const g = t.tow[0];
+  if (g) { ctx.fillStyle = SHADOW; ctx.fillRect(-L * .5 + dx, -B * .66 + dy, L * 1.08, B * 1.32); deckLoad(g.c, -L * .5, L * .58, B * .66); }
+  else { ctx.fillStyle = '#7d6446'; for (let x = -L * .45; x < L * .5; x += L * .16) ctx.fillRect(x, -B * .4, L * .1, B * .8); }
+  ctx.fillStyle = SHADOW; ctx.fillRect(-L * .93 + dx, -B * .62 + dy, L * .36, B * 1.24);
+  ctx.fillStyle = '#f3eee3'; ctx.fillRect(-L * .93, -B * .62, L * .36, B * 1.24); ctx.strokeStyle = rgba('#1c2731', .5); ctx.lineWidth = .35; ctx.strokeRect(-L * .93, -B * .62, L * .36, B * 1.24);
+  ctx.fillStyle = SHADOW; ctx.fillRect(L * .62 + dx, -B * .5 + dy, L * .16, B);
+  ctx.fillStyle = '#f3eee3'; ctx.fillRect(L * .62, -B * .5, L * .16, B); ctx.fillStyle = '#5b4636'; ctx.fillRect(L * .66, -B * .42, L * .1, B * .84);
+  ctx.fillStyle = SHADOW; ctx.beginPath(); ctx.arc(-L * .74 + dx * 2.4, dy * 2.4, 1.6, 0, 7); ctx.fill(); drawStack(-L * .74, 1.6, mine, false);
+  ctx.fillStyle = '#3a2a1a'; for (const x of [L * .52, -L * .1]) { ctx.beginPath(); ctx.arc(x, 0, .5, 0, 7); ctx.fill(); }
+}
+// Her schooner-barges on a long line astern: old schooners with their masts out, loaded when she is
+function drawHookerBarges(t, stern) {
+  const loads = t.tow.map(g => g.c), n = 2, BL = 9.5, BB = 2.7;
+  ctx.strokeStyle = rgba(COL.ink, .6); ctx.lineWidth = .6; ctx.beginPath(); ctx.moveTo(stern, 0); ctx.lineTo(stern - 6 - n * (BL * 2 + 5), 0); ctx.stroke();
+  for (let i = 0; i < n; i++) {
+    const cx = stern - 6 - BL - i * (BL * 2 + 5);
+    ctx.save(); ctx.translate(cx, 0);
+    ctx.beginPath(); ctx.moveTo(BL, 0); ctx.quadraticCurveTo(BL * .7, -BB, 0, -BB); ctx.quadraticCurveTo(-BL * .95, -BB, -BL, 0); ctx.quadraticCurveTo(-BL * .95, BB, 0, BB); ctx.quadraticCurveTo(BL * .7, BB, BL, 0); ctx.closePath();
+    ctx.fillStyle = '#5a4634'; ctx.fill(); ctx.strokeStyle = rgba('#2a1d12', .8); ctx.lineWidth = .5; ctx.stroke();
+    ctx.save(); ctx.scale(.86, .74); ctx.fillStyle = COL.wood; ctx.fill(); ctx.restore();
+    const c = loads[i] || loads[0];
+    if (c) deckLoad(c, -BL * .62, BL * .55, BB * .58); else { ctx.fillStyle = '#7d6446'; for (const x of [-BL * .5, -BL * .1, BL * .3]) ctx.fillRect(x, -BB * .35, BL * .2, BB * .7); }
+    ctx.fillStyle = '#f3eee3'; ctx.fillRect(-BL * .95, -BB * .45, BL * .22, BB * .9);
+    ctx.restore();
+  }
+}
+// The alligator: a box of a scow with a paddle wheel on either side, her winch forward
+function drawAlligatorShape(hullCol, mine, a = 0) {
+  const L = 4.6, B = 2.1, [lx, ly] = boatLight(a), dx = -lx * .5, dy = -ly * .5;
+  for (const sg of [-1, 1]) { ctx.fillStyle = '#4a3a2a'; ctx.fillRect(-L * .2, sg > 0 ? B : -B - 1.1, L * .5, 1.1); }
+  ctx.beginPath(); ctx.moveTo(L, -B * .55); ctx.lineTo(L, B * .55); ctx.quadraticCurveTo(L * .9, B, L * .6, B); ctx.lineTo(-L * .9, B); ctx.quadraticCurveTo(-L, B, -L, B * .7); ctx.lineTo(-L, -B * .7); ctx.quadraticCurveTo(-L, -B, -L * .9, -B); ctx.lineTo(L * .6, -B); ctx.quadraticCurveTo(L * .9, -B, L, -B * .55); ctx.closePath();
+  ctx.fillStyle = shadeHull(hullCol, B, ly); ctx.fill(); ctx.strokeStyle = '#3b2a1e'; ctx.lineWidth = .6; ctx.stroke();
+  ctx.fillStyle = SHADOW; ctx.fillRect(-L * .75 + dx, -B * .7 + dy, L * 1.05, B * 1.4);
+  ctx.fillStyle = '#f3eee3'; ctx.fillRect(-L * .75, -B * .7, L * 1.05, B * 1.4); ctx.strokeStyle = rgba('#1c2731', .5); ctx.lineWidth = .3; ctx.strokeRect(-L * .75, -B * .7, L * 1.05, B * 1.4);
+  ctx.fillStyle = '#2a2a2a'; ctx.fillRect(L * .45, -B * .6, L * .2, B * 1.2);
+  drawStack(-L * .18, .8, mine, false);
+}
+// What she is doing upriver: a boom of logs on a line astern, her cable run out ahead to the anchor
+function drawWarpBoom(stern, now) {
+  const rad = 5.5, off = stern - 3 - rad;
+  ctx.strokeStyle = rgba(COL.ink, .6); ctx.lineWidth = .5; ctx.beginPath(); ctx.moveTo(stern, 0); ctx.lineTo(off + rad, 0); ctx.stroke();
+  ctx.save(); ctx.beginPath(); ctx.ellipse(off, 0, rad, rad * .6, 0, 0, Math.PI * 2); ctx.fillStyle = rgba(COL.logs, .5); ctx.fill(); ctx.clip();
+  ctx.strokeStyle = COL.logs; ctx.lineWidth = .9; ctx.lineCap = 'round';
+  for (let k = -rad; k < rad; k += 1.8) for (let j = -rad; j < rad; j += 3.6) { ctx.beginPath(); ctx.moveTo(off + k, j); ctx.lineTo(off + k + .6, j + 2.6); ctx.stroke(); }
+  ctx.restore();
+  ctx.beginPath(); ctx.ellipse(off, 0, rad, rad * .6, 0, 0, Math.PI * 2); ctx.strokeStyle = COL.wood; ctx.lineWidth = 1.1; ctx.setLineDash([2.4, 1]); ctx.stroke(); ctx.setLineDash([]);
+  const reach = 9 + 3 * Math.sin(now / 2600);
+  ctx.strokeStyle = rgba('#3a3a3a', .7); ctx.lineWidth = .35; ctx.setLineDash([1.2, .8]); ctx.beginPath(); ctx.moveTo(4.6, 0); ctx.lineTo(4.6 + reach, 0); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.arc(4.6 + reach, 0, .6, 0, 7); ctx.fill();
 }
 function drawFishTugShape(t, m, hullCol, mine, a = 0) {
   const L = 8.5, B = 3.2, enclosed = t.model !== 'steamfish', [lx, ly] = boatLight(a), dx = -lx * .7, dy = -ly * .7;
@@ -4060,8 +4250,8 @@ function gfxBoats(zr) {
   }
   const add = (x, y, a, halfPx, beam, moving) => { const [sx, sy] = w2s(x, y), r = halfPx * 16; if (sx < -r || sy < -r || sx > vw + r || sy > vh + r) return; put(x, y, a, halfPx / cam.z, beam, moving); };
   for (const t of S.tugs) if (t.state !== 'laid' && t.x != null) {
-    const m = MODELS[t.model], half = m.sail ? 6.5 : isFish(t) ? 8.5 : m.power >= 6 ? 11.5 : 10;
-    add(t.x, t.y, t.vhd ?? t.hd, half * f, isFish(t) || m.sail ? .42 : .38, t.state === 'sail');
+    const m = MODELS[t.model], half = m.sail ? 6.5 : isFish(t) ? 8.5 : m.warp ? 4.6 : m.hooker ? 14 : m.power >= 6 ? 11.5 : 10;
+    add(t.x, t.y, t.vhd ?? t.hd, half * f, m.warp ? .5 : m.hooker ? .26 : isFish(t) || m.sail ? .42 : .38, t.state === 'sail');
   }
   for (const v of vehicles) if (v.ship) { const [x, y, a] = shipPose(v); add(x, y, a, shipLen(v) * fs, .26, !(v.dwell > 0)); }
   return n;
@@ -4572,6 +4762,9 @@ function towWords(t) {
 function statusOf(t) {
   const at = t.at ? PORT[t.at].name : null;
   const goalName = g => !g ? '' : g.t === 'port' ? PORT[g.id].name : g.t === 'ground' ? GROUND[g.id].name : '';
+  if (t.refit && t.refit.done && t.state === 'laid') return `In the yard at ${at}: her compound engine is going in.`;
+  if (t.refit && t.refit.yard && t.state === 'sail') return `Bound for the yard at ${PORT[t.refit.yard].name} for her new engine.`;
+  if (isWarp(t) && t.state !== 'laid') return t.warpReady && S.day < t.warpReady ? `On her way by rail to ${WARP_RIVERS[t.river]}.` : `Warping log booms down ${riverWhere(t.river || t.at)}.`;
   if (t.state === 'laid') return S.season ? `Laid up at ${at}.` : `Laid up for the winter at ${at}.`;
   if (t.layup && t.state === 'sail') { const tw = towWords(t); return `Bound for ${PORT[t.layup].name} to lay up${tw ? ' with ' + tw : t.fish > .05 ? ` with ${t.fish.toFixed(1)} tons of fish` : ''}.`; }
   if (t.jobTow) { const j = S.jobs.find(j => j.id === t.jobTow); return j ? `Towing the ${j.name} into ${PORT[j.dest].name}.` : 'Towing.'; }
@@ -4596,6 +4789,8 @@ function statusOf(t) {
 function tugGlyph(t) {
   const col = t.owner === 'p' ? 'var(--player)' : (RIVAL[t.co] && RIVAL[t.co].color) || 'var(--rival)';
   if (MODELS[t.model].sail) return `<svg class="glyph" viewBox="0 0 22 22"><path d="M3 15h16l-3 3H6z" fill="${col}"/><path d="M9 14V2L3 14zM12 14V5l5 9z" fill="${col}"/></svg>`;
+  if (MODELS[t.model].hooker) return `<svg class="glyph" viewBox="0 0 22 22"><path d="M1 14h20l-2 3H2z" fill="${col}"/><rect x="6" y="10" width="11" height="4" fill="var(--c-lumber)"/><rect x="2" y="9" width="3" height="5" fill="${col}"/><rect x="3" y="5" width="1.6" height="4" fill="${t.owner === 'p' ? 'var(--magenta)' : col}"/></svg>`;
+  if (MODELS[t.model].warp) return `<svg class="glyph" viewBox="0 0 22 22"><path d="M4 13h14v3H4z" fill="${col}"/><circle cx="11" cy="13" r="3.4" fill="none" stroke="${col}" stroke-width="1.4"/><rect x="6" y="9" width="7" height="4" fill="${col}"/><rect x="9" y="5" width="1.6" height="4" fill="${col}"/><path d="M18 14l3 0" stroke="${col}" stroke-width="1"/></svg>`;
   return isFish(t)
     ? `<svg class="glyph" viewBox="0 0 22 22"><path d="M3 13h15l-3 4H5z" fill="${col}"/><rect x="6" y="8" width="8" height="5" fill="${col}"/><rect x="8" y="4" width="2" height="4" fill="${col}"/></svg>`
     : `<svg class="glyph" viewBox="0 0 22 22"><path d="M2 13h18l-3 4H4z" fill="${col}"/><rect x="5" y="9" width="7" height="4" fill="${col}"/><rect x="13" y="5" width="3" height="8" fill="${t.owner === 'p' ? 'var(--magenta)' : col}"/></svg>`;
@@ -4632,7 +4827,7 @@ function contractsHTML() {
 function contractHTML(id) {
   const k = contracts().find(k => k.id === id); if (!k) return null;
   const offer = k.state === 'offer', fish = k.c === 'fish', mkt = kMarket(k);
-  const mine = S.tugs.filter(t => t.owner === 'p' && (fish ? isFish(t) : !isFish(t)));
+  const mine = S.tugs.filter(t => t.owner === 'p' && (fish ? isFish(t) : !isFish(t) && !isWarp(t)));
   const onRun = t => fish ? t.home === k.to : t.route.includes(k.from) && t.route.includes(k.to) && t.route.indexOf(k.from) !== -1;
   const letter = `${ucf(k.cust)} ${offer ? 'want' : 'have contracted for'} ${qtyText(k)}${fish ? ` ${runText(k)}` : `, loaded at ${PORT[k.from].name} and delivered to ${PORT[k.to].name}`}, ${dueText(k)}${k.years > 1 ? `, every season for ${k.years} seasons` : ''}.`;
   return `${head(offer ? 'Contract offer' : 'Contract', esc(ucf(qtyText(k))))}
@@ -5108,7 +5303,8 @@ function tugHTML(t) {
     <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details>
     <button class="btn ghost" data-act="select" data-t="co" data-id="${t.co}">About ${esc(coName(t.co))}</button>`;
   }
-  const jobs = !isFish(t) && S.season ? S.jobs.filter(j => j.state === 'open' && m.power >= j.minPower) : [];
+  if (isWarp(t)) return warpHTML(t);
+  const jobs = !isFish(t) && S.season ? S.jobs.filter(j => j.state === 'open' && canTake(t, j)) : [];
   let orders;
   if (isFish(t)) {
     orders = `<h3>Fishing</h3>
@@ -5119,9 +5315,9 @@ function tugHTML(t) {
     orders = `<h3>Route</h3>
     ${t.route.length >= 2 ? `<ol class="stops">${t.route.map((p, i) => `<li class="${i === t.ri % t.route.length && S.season ? 'next' : ''}">${esc(PORT[p].name)}</li>`).join('')}</ol>` : '<p class="fine">No route yet.</p>'}
     <button class="btn" data-act="editRoute">${t.route.length >= 2 ? 'Change route' : 'Set a route'}</button>
-    <p class="fine">At each stop the captain delivers cargo that pays here and loads whatever pays best further along the route. Logs go in a boom: three times the load, but slow.</p>`;
+    <p class="fine">At each stop the captain delivers cargo that pays here and loads whatever pays best further along the route. ${m.hooker ? 'She carries logs as cargo, never in a boom.' : 'Logs go in a boom: three times the load, but slow.'}</p>`;
   }
-  const towing = isFish(t) ? '' : `<h3>In tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing in tow.'}</p>
+  const towing = isFish(t) ? '' : m.hooker ? `<h3>Aboard and in tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing aboard.'}</p>` : `<h3>In tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing in tow.'}</p>
     ${jobs.length ? `<h3>Tow wanted</h3><ul class="list">${jobs.map(j => `<li><button class="item" data-act="select" data-t="job" data-id="${j.id}">${jobGlyph(j)}<span><b>${esc(j.name)}</b><small>${esc(j.where)} → ${PORT[j.dest].name}</small></span><span class="side">${money(j.reward)}</span></button></li>`).join('')}</ul>` : ''}`;
   const sell = ui.confirmSell === t.id
     ? `<div class="confirm"><b>Sell ${esc(t.name)} for ${money(tugValue(t) * .8)}?</b><div class="row"><button class="btn danger wide" data-act="sellYes">Sell her</button><button class="btn wide" data-act="sellNo">Keep her</button></div></div>`
@@ -5137,7 +5333,35 @@ function tugHTML(t) {
   <div class="seg" role="group" aria-label="Captain's stance"><button data-act="stance" data-v="cautious" aria-pressed="${t.stance === 'cautious'}">Cautious</button><button data-act="stance" data-v="bold" aria-pressed="${t.stance === 'bold'}">Bold</button></div>
   <p class="fine">${t.stance === 'cautious' ? 'Runs for shelter when a gale is forecast and stays in port until it blows over.' + (isFish(t) ? ' Obeys the closed season.' : '') : 'Keeps going whatever the glass says. Faster, but gales wreck tows, damage the hull and can sink her.' + (isFish(t) ? ' Fishes through the closed season.' : '')}</p>
   ${orders}
+  ${refitHTML(t)}
   ${layupHTML(t)}
+  <div class="row"><button class="btn ghost wide" data-act="renameTug">Rename her</button></div>
+  ${sell}`;
+}
+// The compound refit: offered to a simple-engine tug from 1880
+function refitHTML(t) {
+  if (t.refit) return `<h3>The compound refit</h3><p class="fine">${t.refit.winter ? 'Her new engine and boiler go in over the winter. She will have them by spring.' : t.refit.done ? `In the yard at ${PORT[t.at].name}. She comes out with her compound engine about ${fmtDate(t.refit.done)}.` : `Bound for the yard at ${PORT[t.refit.yard].name}, where her new engine goes in.`}</p>`;
+  if (!canRefit(t)) return '';
+  const to = MODELS[MODELS[t.model].refitTo], m = MODELS[t.model];
+  return `<h3>The compound refit</h3>
+    <div class="row"><button class="btn wide" data-act="refit" ${S.cash >= REFIT_COST && !t.jobTow ? '' : 'disabled'}>Fit a compound engine · ${money(REFIT_COST)}</button></div>
+    <p class="fine">A new compound engine and coal-fired boiler: she tows ${to.power} instead of ${m.power}, makes ${to.kn} knots instead of ${m.kn}, and runs for ${money(to.op)} a day instead of ${money(m.op)}. ${S.season ? `She steams to the nearest yard and spends about two weeks there.` : 'Ordered now, it is done over the winter.'}</p>`;
+}
+// The alligator's panel: her river, her booms, and moving her to another river
+function warpHTML(t) {
+  const m = MODELS[t.model], pid = t.river || t.at, others = warpRivers().filter(id => id !== pid);
+  const sell = ui.confirmSell === t.id
+    ? `<div class="confirm"><b>Sell ${esc(t.name)} for ${money(tugValue(t) * .8)}?</b><div class="row"><button class="btn danger wide" data-act="sellYes">Sell her</button><button class="btn wide" data-act="sellNo">Keep her</button></div></div>`
+    : `<button class="btn ghost" data-act="sell">Sell for ${money(tugValue(t) * .8)}</button>`;
+  return `${head(m.name, esc(t.name))}
+  <p class="status">${esc(statusOf(t))}</p>
+  ${planThumb('boat', t.model, 'the ' + t.name)}
+  <dl class="kv">${earnedHTML(t)}<dt>Booms brought down</dt><dd>${t.booms || 0}</dd><dt>Built</dt><dd>${yearOf(t.bought)}, at Simcoe</dd><dt>Running cost</dt><dd>${money(m.op)} a day</dd></dl>
+  <details class="specsheet" data-sheet ${ui.sheetOpen ? 'open' : ''}><summary>Engine and hull</summary>${specHTML(m)}</details>
+  <h3>On the river</h3>
+  <p class="fine">She works ${riverWhere(pid)}, winching the lumbermen's booms across the lakes and over the portages. About once a week a boom of some ${Math.round(WARP_LOGS * pineLeft(S.day))} loads of logs reaches ${PORT[pid].name} for your tugs to carry, and the lumbermen pay her about ${money(WARP_FEE * (.6 + .4 * pineLeft(S.day)))}.${pineLeft(S.day) < 1 ? ' Less comes down now that the pine is running out.' : ''} The bay's gales can't reach her up there.</p>
+  ${others.length ? `<h3>Another river</h3><div class="row">${others.map(id => `<button class="btn wide" data-act="warpMove" data-v="${id}" ${S.cash >= WARP_MOVE ? '' : 'disabled'}>${esc(ucf(WARP_RIVERS[id]))}</button>`).join('')}</div>
+  <p class="fine">She goes by rail for ${money(WARP_MOVE)} and starts work in about a week.</p>` : ''}
   <div class="row"><button class="btn ghost wide" data-act="renameTug">Rename her</button></div>
   ${sell}`;
 }
@@ -5162,7 +5386,7 @@ function earnedHTML(t) {
 }
 const uninsured = () => S.day > dayOf(yearOf(S.day), 11, 30);
 function layupHTML(t) {
-  if (!S.season) return '';
+  if (!S.season || (t.refit && !t.refit.winter)) return '';
   if (t.state === 'laid') return `<h3>Laid up</h3>
     <p class="fine">Tied up at ${PORT[t.at].name} with her crew paid off. She costs ${money(runCost(t) * LAID_COST)} a day for a shipkeeper and her moorings, and no gale can touch her. She fits out by herself in the spring${t.tow.length ? `, with ${esc(towWords(t))} still alongside` : ''}.</p>
     <button class="btn primary" data-act="fitOut">Fit out and sail</button>
@@ -5286,17 +5510,17 @@ function shipHTML(id) {
 }
 function jobHTML(j) {
   if (!j) return null;
-  const tugs = S.tugs.filter(t => t.owner === 'p' && !isFish(t) && !t.jobTow && S.season);
+  const tugs = S.tugs.filter(t => t.owner === 'p' && !isFish(t) && !isWarp(t) && !MODELS[t.model].hooker && !t.jobTow && S.season);
   const racing = S.tugs.filter(t => t.job === j.id);
   const rival = racing.find(t => t.owner === 'r');
   return `${head(j.kind === 'salvage' ? 'Salvage' : 'Tow wanted', (j.kind === 'salvage' ? 'Steamer ' : 'Schooner ') + esc(j.name))}
   <p class="desc">${j.kind === 'salvage' ? `Aground ${esc(j.where)} after the gale. Pull her off and bring her to the shipyard at ${PORT[j.dest].name}.` : `Wind-bound ${esc(j.where)} with a cargo of ${esc(j.cargo)}. Her master wants a tow into ${PORT[j.dest].name}.`}</p>
-  <dl class="kv"><dt>Pays</dt><dd class="pos">${money(j.reward)}</dd><dt>Offer stands for</dt><dd>${daysLeft(j)}</dd>${j.minPower ? `<dt>Needs</dt><dd>A tug that tows 5 or more</dd>` : ''}</dl>
+  <dl class="kv"><dt>Pays</dt><dd class="pos">${money(j.reward)}</dd><dt>Offer stands for</dt><dd>${daysLeft(j)}</dd>${j.minPower ? `<dt>Needs</dt><dd>A tug that tows 5 or more, or a wrecking tug</dd><dt>A wrecking tug earns</dt><dd class="pos">${money(j.reward * 1.25)}</dd>` : ''}</dl>
   ${j.state === 'tow' ? (() => { const t = S.tugs.find(t => t.id === j.tug); return `<p class="status" style="color:var(--${t && t.owner === 'p' ? 'money' : 'rival'})">${t ? (t.owner === 'p' ? 'Your ' : esc(coName(t.co)) + "'s ") + esc(t.name) + ' has her in tow.' : 'Taken.'}</p>`; })()
     : rival ? `<p class="status" style="color:var(--rival)">${esc(coName(rival.co))}'s ${esc(rival.name)} is racing for her!</p>` : '<p class="fine">First tug alongside gets the job. Tugs from the other companies may race you for it.</p>'}
   <h3>Send a tug</h3>
   ${j.state !== 'open' ? '' : tugs.length ? `<ul class="list">${tugs.map(t => {
-    const ok = MODELS[t.model].power >= j.minPower, eta = Math.hypot(t.x - j.pos[0], t.y - j.pos[1]) * 1.25 / Math.max(10, tugSpeed(t));
+    const ok = canTake(t, j), eta = Math.hypot(t.x - j.pos[0], t.y - j.pos[1]) * 1.25 / Math.max(10, tugSpeed(t));
     return `<li><button class="item" data-act="sendJob" data-tug="${t.id}" data-job="${j.id}" ${ok && t.job !== j.id ? '' : 'disabled'}>${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${t.state === 'laid' ? 'Laid up. She goes back to her moorings after. ' : ''}${!ok ? 'Too small for salvage' : t.job === j.id ? 'On her way' : `About ${eta < 1 ? 'a day' : Math.ceil(eta) + ' days'} away${t.tow.length ? ', with her tow' : ''}`}</small></span><span class="side">${ok && t.job !== j.id ? 'Send' : ''}</span></button></li>`;
   }).join('')}</ul>` : '<p class="fine">You have no towing tugs free.</p>'}`;
 }
@@ -5806,8 +6030,9 @@ function shipyardHTML(yard) {
   <div class="seg" role="group" aria-label="Shipyard">${SHIPYARDS.map(id => `<button data-act="yard" data-v="${id}" aria-pressed="${ui.yard === id}">${PORT[id].name}</button>`).join('')}</div>
   <div class="namefield"><label for="tugName" class="fine">Name</label><input id="tugName" maxlength="24" value="${esc(ui.buyName)}" autocomplete="off"><button class="btn ghost" data-act="rename" aria-label="Suggest another name">Another</button></div>
   <div class="models">${models.map(([k, m]) => `<div class="model">${planThumb('boat', k, 'the ' + m.name)}<div><h4>${m.name}</h4><p>${m.blurb}</p></div>
-    <button class="btn primary" data-act="buy" data-model="${k}" ${S.cash >= m.price ? '' : 'disabled'}>${money(m.price)}</button>
-    <div class="specs">${m.kind === 'tow' ? `<span>Tows <b>${m.power}</b> barges or a <b>${m.power * 3}</b>-load boom</span>` : `<span>Holds <b>${m.hold}</b> tons</span><span>Works <b>${m.net}</b> yards of net</span>`}<span>Speed <b>${m.kn}</b> knots${m.sail ? ' in a breeze' : ' light'}${m.raftKn ? `, <b>${m.raftKn}</b> with a raft` : ''}</span><span>Costs <b>${money(m.op)}</b> a day</span><span>${m.risk <= .7 ? 'Very seaworthy' : m.risk <= 1 ? 'Seaworthy' : 'Tender in a sea'}</span></div>
+    <button class="btn primary" data-act="buy" data-model="${k}" ${S.cash >= m.price && (!m.warp || warpRivers().length) ? '' : 'disabled'}>${money(m.price)}</button>
+    ${m.warp ? `<label class="riverpick"><span class="fine">Ship her by rail to</span><select id="warpRiver">${warpRivers().map(id => `<option value="${id}">${esc(ucf(riverWhere(id)))}</option>`).join('')}</select></label>` : ''}
+    <div class="specs">${m.warp ? `<span>Brings down a boom of about <b>${WARP_LOGS}</b> loads of logs a week</span><span>Paid about <b>${money(WARP_FEE)}</b> a boom</span>` : m.hooker ? `<span>Carries <b>${m.power}</b> loads with her barges, <b>${m.power + (m.deckLoad || 0)}</b> of lumber</span><span>No log booms, tows or salvage</span>` : m.kind === 'tow' ? `<span>Tows <b>${m.power}</b> barges or a <b>${m.power * 3}</b>-load boom</span>${m.wreck ? '<span>Any salvage, and a quarter more for it</span>' : ''}` : `<span>Holds <b>${m.hold}</b> tons</span><span>Works <b>${m.net}</b> yards of net</span>`}<span>Speed <b>${m.kn}</b> knots${m.sail ? ' in a breeze' : ' light'}${m.raftKn ? `, <b>${m.raftKn}</b> with a raft` : ''}</span><span>Costs <b>${money(m.op)}</b> a day</span><span>${m.warp ? 'Works upriver, out of the gales' : m.risk <= .7 ? 'Very seaworthy' : m.risk <= 1 ? 'Seaworthy' : 'Tender in a sea'}</span></div>
     <p class="specline">${m.sail ? `${esc(m.spec.rig.split('.')[0])}` : `${esc(m.spec.engine.split(':')[0])}, ${m.spec.hp} at ${m.spec.rpm}`} · ${ftIn(m.spec.len)} long, draws ${ftIn(m.spec.draft)}</p>
     <details class="specsheet"><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details></div>`).join('')}</div>
   ${soon.length ? `<p class="fine">Coming: ${soon.map(([, m]) => `${m.name} (${m.year})`).join(', ')}.</p>` : ''}
@@ -5920,6 +6145,7 @@ const HISTORY = [
   [1884, 5, 'ships', "The CPR's steamers sail from Owen Sound", 'The Canadian Pacific Railway began its own steamer service from Owen Sound to Port Arthur on Lake Superior.'],
   [1885, 5, 'trade', 'Log rafts for Michigan', 'Huge rafts of Georgian Bay logs were towed across Lake Huron to the sawmills of the Saginaw River.'],
   [1885, 11, 'land', 'The last spike', 'The Canadian Pacific Railway was finished across the country. While the line round Lake Superior was built, its men and supplies had gone west by boat from Georgian Bay.'],
+  [1889, 5, 'trade', 'The alligator', 'West & Peachey of Simcoe, Ontario, began building steam warping tugs that winched log booms across lakes and hauled themselves over the portages. Some 200 were built.'],
   [1893, 4, 'trade', 'A warning about the fish', 'A Dominion commission found the bay being fished out, whitefish and trout alike, much of the catch shipped to American buyers. It called for closed seasons and limits on nets.'],
   [1893, 5, 'nature', 'Algonquin Park', 'Ontario set aside Algonquin Park, the high country where the Muskoka and Magnetawan rivers begin their run to the bay.'],
   [1897, 7, 'trade', 'The Dingley Tariff', 'The United States raised its duty on Canadian lumber.'],
@@ -6094,7 +6320,9 @@ const ACTS = {
   shipyard: el => { ui.buyName = null; showModal(shipyardHTML(el.dataset.yard)); },
   yard: el => { ui.buyName = $('#tugName')?.value || ui.buyName; showModal(shipyardHTML(el.dataset.v)); },
   rename: () => { ui.buyName = newName('p'); showModal(shipyardHTML()); },
-  buy: el => { const nm = ($('#tugName')?.value || '').trim().slice(0, 24) || ui.buyName; ui.buyName = null; buyTug(el.dataset.model, ui.yard, nm); },
+  buy: el => { const nm = ($('#tugName')?.value || '').trim().slice(0, 24) || ui.buyName; ui.buyName = null; buyTug(el.dataset.model, ui.yard, nm, $('#warpRiver')?.value); },
+  refit: () => { const t = tugSel(); if (t && orderRefit(t)) toast(S.season ? `${t.name} is bound for the yard.` : `${t.name} will have her new engine by spring.`); ui.panelDirty = true; },
+  warpMove: el => { const t = tugSel(); if (t && warpMove(t, el.dataset.v)) toast(`${t.name} is on her way by rail.`); ui.panelDirty = true; },
   bank: () => showModal(bankHTML()),
   borrow: () => { if (S.loans + 5000 <= loanLimit()) { S.loans += 5000; S.cash += 5000; } showModal(bankHTML()); ui.panelDirty = true; },
   repay: () => { if (S.loans >= 5000 && S.cash >= 5000) { S.loans -= 5000; S.cash -= 5000; } showModal(bankHTML()); ui.panelDirty = true; },
@@ -6955,8 +7183,9 @@ function hBoatsHere(pid) {
   const out = [];
   for (const t of S.tugs) if (t.at === pid && t.state !== 'sail') {
     const m = MODELS[t.model], sp = m.spec || {};
-    out.push({ key: t.id, sel: { t: 'tug', id: t.id }, L: (sp.len || 60) * FT, B: (sp.beam || 15) * FT, kind: m.sail ? 'skiff' : isFish(t) ? (t.model === 'steamfish' ? 'openfish' : 'fish') : t.model === 'steelwrecker' ? 'wrecker' : 'tug',
-      hull: t.owner === 'p' ? COL.player : (RIVAL[t.co] && RIVAL[t.co].color) || COL.rival, mine: t.owner === 'p', name: t.name, steam: !/diesel|gas/.test(t.model) && !m.sail, laid: t.state === 'laid' });
+    out.push({ key: t.id, sel: { t: 'tug', id: t.id }, L: (sp.len || 60) * FT, B: (sp.beam || 15) * FT, kind: m.sail ? 'skiff' : isFish(t) ? (t.model === 'steamfish' ? 'openfish' : 'fish') : m.warp ? 'alligator' : m.hooker ? 'steambarge' : m.wreck ? 'wrecker' : 'tug',
+      hull: t.owner === 'p' ? COL.player : (RIVAL[t.co] && RIVAL[t.co].color) || COL.rival, mine: t.owner === 'p', name: t.name, steam: !/diesel|gas/.test(t.model) && !m.sail, laid: t.state === 'laid',
+      loaded: t.tow.length > 0, cargo: t.tow[0] && t.tow[0].c });
   }
   for (const v of vehicles) if (v.ship && v.atPort === pid && v.dwell > 0) {
     out.push({ key: v.id, sel: { t: 'ship', id: v.id }, L: v.lenFt * FT, B: v.beamFt * FT, kind: v.type, hull: v.hue || '#2f3a40', stack: v.stack, band: v.band, loaded: v.loaded, cargo: v.cargo, name: v.name, steam: !SHIP_TYPES[v.type].sail, ship: true });
@@ -7025,6 +7254,7 @@ function hUpdateTrains(now) {
 const HLIGHT = [-Math.SQRT1_2, Math.SQRT1_2]; // toward the light, in a harbour's frame (x east, y north)
 const hLit = (nx, ny) => { const L = Math.hypot(nx, ny) || 1; return .68 + .42 * Math.max(0, (nx * HLIGHT[0] + ny * HLIGHT[1]) / L); };
 function hullHalf(t, B, kind) { // half her breadth at t, from -1 (stern) to 1 (stem)
+  if (kind === 'alligator') return B / 2 * (t > .78 ? .6 + .4 * Math.sqrt(Math.max(0, (1 - t) / .22)) : t < -.86 ? .8 + .2 * Math.sqrt(Math.max(0, (1 + t) / .14)) : 1);
   const ship = /laker|canaller|steambarge|passenger/.test(kind), fine = ship ? .2 : /schooner/.test(kind) ? .34 : .42, s0 = 1 - 2 * fine;
   let h = 1;
   if (t > s0) { const q = (t - s0) / (1 - s0); h = Math.pow(Math.max(0, 1 - q * q), .62); }
@@ -7065,7 +7295,7 @@ function hBoatDraw(P, k, b, x, y, hd, moving, now, sel) {
   const d = HB.d, vx = d.sa, vy = d.ca, F = isDarkTheme() ? .8 : 1, L = b.L, B = Math.max(2.4, b.B), kind = b.kind;
   const ax = Math.cos(hd), ay = Math.sin(hd), bx = -ay, by = ax, W = (u, v) => [x + ax * u + bx * v, y + ay * u + by * v];
   const big = /laker|canaller|passenger|steambarge/.test(kind), sail = kind === 'skiff' || /schooner/.test(kind), tug = kind === 'tug' || kind === 'wrecker';
-  const fb = big ? 3.2 : kind === 'skiff' ? .6 : /schooner/.test(kind) ? 1.8 : 1.3, rise = big ? .18 : sail ? .3 : .45;
+  const fb = big ? 3.2 : kind === 'skiff' ? .6 : kind === 'alligator' ? .7 : /schooner/.test(kind) ? 1.8 : 1.3, rise = big ? .18 : sail || kind === 'alligator' ? .3 : .45;
   const sheer = t => fb * (1 + rise * Math.max(0, t) ** 2 + rise * .3 * Math.max(0, -t) ** 2);
   if (moving && !GFX.on) { // the wake
     ctx.strokeStyle = rgba('#ffffff', .55); ctx.lineWidth = Math.max(1, .6 * k);
@@ -7144,6 +7374,11 @@ function hBoatDraw(P, k, b, x, y, hd, moving, now, sel) {
       for (const u of [-L * .2, -L * .32]) at(u, () => house(u, L * .08, B * .45, z(u / (L / 2)), z(u / (L / 2)) + .5, '#c9b48e', '#d8c49c'));
       stack(-L * .02, z(0) + 4.5, '#1c1c1c', null, Math.max(.35, B * .08)); break;
     case 'skiff': sails([L * .25, -L * .15], L * .9); break;
+    case 'alligator': // a cabin over her boiler, a paddle box either side, the winch forward
+      at(-L * .05, () => house(-L * .05, L * .45, B * .8, z(0), z(0) + 2.1, white, '#7a6550', 1.1));
+      for (const sd of [1, -1]) at(L * .02, () => { const [cx, cy] = W(L * .02, sd * (B / 2 + .45)); hHouse(P, k, cx, cy, hd, L * .2, .9, 0, z(0) + .9, '#5a4634', '#6b5641', vx, vy, F); });
+      at(L * .32, () => house(L * .32, L * .1, B * .5, z(.6), z(.6) + .9, '#2f2f2f', '#3a3a3a'));
+      stack(-L * .08, z(0) + 5.2, b.mine ? COL.stackP : '#1c1c1c', null, Math.max(.3, B * .07)); break;
     case 'schooner2': case 'schooner3':
       if (b.loaded && b.cargo === 'lumber') at(-L * .05, () => house(-L * .05, L * .55, B * .7, z(0), z(0) + 1.6, '#d9b77a', '#e6c991'));
       else for (const u of [L * .15, -L * .1]) at(u, () => house(u, L * .1, B * .4, z(u / (L / 2)), z(u / (L / 2)) + .45, '#6b5a45', '#7a6850'));
