@@ -140,12 +140,24 @@ h3 .count{font-family:var(--font-ui);font-size:12px;color:var(--ink-2);font-weig
   background:transparent;border:0;border-bottom:1px solid var(--rule);padding:9px 2px;cursor:pointer;min-height:48px}
 .item:hover{background:var(--surface-2)}
 .btn .btn-ic{width:18px;height:18px;margin-right:8px;vertical-align:-3px;flex-shrink:0}
-.sharecard{display:block;width:100%;height:auto;border:1px solid var(--rule);border-radius:4px;margin:4px 0 10px}
-.sharetext{display:block;box-sizing:border-box;width:100%;flex-shrink:0;font:inherit;font-size:15px;line-height:1.4;border:1px solid var(--rule);border-radius:4px;padding:8px 10px;background:var(--surface);color:var(--ink);resize:none;-webkit-user-select:text;user-select:text}
+.sharecard{display:block;width:100%;height:auto;aspect-ratio:1200/630;border:1px solid var(--rule);border-radius:4px;margin:4px 0 2px;background:var(--surface-2)}
+.sharecard.wait{display:grid;place-items:center;color:var(--ink-2);font-size:13px}
+.sharemsg summary{min-height:36px}
+.sharemsg summary::-webkit-details-marker{display:none}
+.sharemsg summary::before{content:'▸';margin-right:6px}
+.sharemsg[open] summary::before{content:'▾'}
+.sharegrid{display:grid;gap:8px}
+.sharegrid > div{display:flex;flex-direction:column;gap:8px;min-width:0}
+.sharegrid h3{margin-top:6px}
+@media (min-width: 900px){
+  .sheet.wide{width:min(960px,100%)}
+  .sharegrid{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;align-items:start}
+  .sharegrid .sharecard{margin-top:6px}
+}
+.sharemsg p{margin:2px 0 6px;padding:8px 10px;border-left:3px solid var(--rule);font-size:14px;line-height:1.45;white-space:pre-line;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text}
 a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:inherit}
 .iconbtn svg{width:20px;height:20px}
 #soundBtn[aria-pressed="false"]{color:var(--ink-2)}
-#shareBtn svg{width:19px;height:19px}
 .slider{display:flex;align-items:center;gap:12px;margin:10px 0 0;font-size:15px}
 .slider span{flex:0 0 170px}
 .slider input{flex:1;min-width:0;height:32px;accent-color:var(--magenta)}
@@ -342,7 +354,6 @@ table.cargo td.n{text-align:right}
       <button data-act="speed" data-v="2" aria-label="Fast" aria-pressed="false"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M1 4l9 6-9 6zM10 4l9 6-9 6z"/></svg></button>
       <button data-act="speed" data-v="3" aria-label="Fastest" aria-pressed="false"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M0 5l7 5-7 5zM6.5 5l7 5-7 5zM13 5l7 5-7 5z"/></svg></button>
     </div>
-    <button class="iconbtn" id="shareBtn" data-act="share" aria-label="Share how you're doing"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v11M6 6l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9H4v9h12V9h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
     <button class="iconbtn" id="soundBtn" data-act="sound" aria-pressed="true" aria-label="Sound on. Tap to turn it off"></button>
     <button class="iconbtn" data-act="menu" aria-label="Menu"><svg viewBox="0 0 20 20" fill="currentColor"><rect x="3" y="4" width="14" height="2" rx="1"/><rect x="3" y="9" width="14" height="2" rx="1"/><rect x="3" y="14" width="14" height="2" rx="1"/></svg></button>
     </div>
@@ -5110,7 +5121,7 @@ function routePreview(stops, t) {
    ===================================================================== */
 function queueModal(fn) { ui.queue.push(fn); if (!ui.modalOpen) nextModal(); }
 function nextModal() { const fn = ui.queue.shift(); if (!fn) { closeModal(); return; } showModal(typeof fn === 'function' ? fn() : fn); }
-function showModal(html) { $('#modalBody').innerHTML = html; $('#modal').hidden = false; ui.modalOpen = true; $('#modalBody').scrollTop = 0; const b = $('#modalBody .btn.primary'); if (b) b.focus({ preventScroll: true }); }
+function showModal(html, cls) { $('#modalBody').className = 'sheet' + (cls ? ' ' + cls : ''); $('#modalBody').innerHTML = html; $('#modal').hidden = false; ui.modalOpen = true; $('#modalBody').scrollTop = 0; const b = $('#modalBody .btn.primary'); if (b) b.focus({ preventScroll: true }); }
 function closeModal() { $('#modal').hidden = true; ui.modalOpen = false; if (playLog.unsub) { playLog.unsub(); playLog.unsub = null; } if (ui.queue.length) nextModal(); }
 /* ---------- First-play tour: the screen dims, a ring picks out one thing at a time, and a card explains it ---------- */
 const TOUR_KEY = 'tugboat-tour-v1';
@@ -5178,8 +5189,8 @@ const TOUR = [
     body: () => { const k = offeredContracts()[0]; return 'Customers offer contracts: so many loads a season from one port to another, at a better price than the market. Fall short and you pay a penalty on every missing load.<br><br>'
       + (k ? `Your first offer is here: ${esc(qtyText(k))} from ${esc(runText(k))}, the run ${esc(myTug().name)} already makes. After the tour, tap it and <b>Sign it</b>.` : 'New offers come each spring, and now and then during the season.'); } },
   { title: 'The menu',
-    rect: () => rectOf($('[data-act="menu"]'), $('#soundBtn'), $('#shareBtn')),
-    body: () => 'Save and load your game here, or send it to another device. The game also saves itself at the end of every season.<br><br>Beside it, the speaker turns the sound on and off, and the share button sends family and friends how your company is doing. To see this tour again, open the menu and tap <b>Show me how to play</b>.' },
+    rect: () => rectOf($('[data-act="menu"]'), $('#soundBtn')),
+    body: () => 'Save and load your game here, send it to another device, or share how your company is doing with family and friends. The game also saves itself at the end of every season.<br><br>Beside it, the speaker turns the sound on and off. To see this tour again, open the menu and tap <b>Show me how to play</b>.' },
   { title: 'Ready to sail', next: 'Start playing', last: true,
     enter: () => { select(null); flyTo(nodePos('p:collingwood'), cam.fitZ * 2.2); },
     body: () => `Tap <b>Start playing</b> and watch ${esc(myTug().name)} make her first run to Parry Sound.<br><br>A good start: let her earn on her route, then buy a second boat. Later you'll find harbour views of the railway towns (zoom right in), a stock exchange, and ninety years of real history.` },
@@ -5313,7 +5324,7 @@ async function openPlayers() {
   if (playLog.unsub) playLog.unsub();
   playLog.unsub = playLog.db.collection('plays').onSnapshot(snap => { playLog.rows = snap.docs.filter(d => d.exists).map(d => ({ id: d.id, data: d.data() })); paint(); }, () => { playLog.rows = []; paint(); });
 }
-/* ---------- Sharing how you're doing: a message and a newspaper-style card, through the device's share sheet ---------- */
+/* ---------- Sharing how you're doing: a newspaper-style card and a message, and the ways to send them ---------- */
 const SHARE_ICON = '<svg class="btn-ic" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v11M6 6l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 9H4v9h12V9h-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
 // The link a share sends: the standalone copy's own address when played there, otherwise the claude.ai page
 const CLAUDE_URL = 'https://claude.ai/artifact/1XSQxc4DfRKWqhCkesKzwJ';
@@ -5329,16 +5340,16 @@ function shareFacts() {
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
   return { nw, title: titleFor(nw), tow, fish, flag, rev, live, rank: 1 + rivals.filter(r => r > rev).length, of: rivals.length + 1,
     fleet: [tow && plural(tow, 'tug'), fish && plural(fish, 'fish boat')].filter(Boolean).join(' and ') || 'no boats',
-    value: sharePrice('me') * SHARES, filled: S.kFilled || 0, seasonYear: live || !last ? S.year : last.year, when: `${S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter'} ${S.year}` };
+    filled: S.kFilled || 0, seasonYear: live || !last ? S.year : last.year, when: `${S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter'} ${S.year}` };
 }
 function shareText() {
   const f = shareFacts();
   return [`${S.company}, ${f.when}`,
-    `Along the waterfront they call me ${f.title}. The company is worth ${money(f.nw)}.`,
-    `Fleet: ${f.fleet}${f.flag ? `, flagship the ${f.flag.name}` : ''}.`,
-    f.live && !f.rev ? 'My first season has just begun.' : `${f.live ? 'This season so far' : `The ${f.seasonYear} season`}: ${money(f.rev)} earned, ${ordinal(f.rank)} of ${f.of} companies on the bay.`,
-    f.filled ? `Contracts filled: ${f.filled}.` : '',
-    `Can you beat that? Play Tugboat Tycoon: ${GAME_URL}`].filter(Boolean).join('\n');
+    `Worth ${money(f.nw)}. Along the waterfront they call me ${f.title}.`,
+    `My fleet: ${f.fleet}${f.flag ? `. Flagship: the ${f.flag.name}` : ''}.`,
+    f.live && !f.rev ? 'My first season has just begun.'
+      : `${f.live ? 'This season so far' : `The ${f.seasonYear} season`}: ${money(f.rev)} earned, ${ordinal(f.rank)} of ${f.of} companies on the bay${f.filled ? `, ${f.filled} contract${f.filled === 1 ? '' : 's'} filled` : ''}.`,
+    `Can you beat that? Play Tugboat Tycoon: ${GAME_URL}`].join('\n');
 }
 // The card, 1200 by 630, the shape link previews use
 async function shareCard() {
@@ -5360,7 +5371,7 @@ async function shareCard() {
   const top = 222 + lines.length * (size + 8) + 6;
   // the facts on the left, the flagship's side view on the right
   const rows = [['Standing', f.title], ['Fleet', f.fleet], [f.live ? 'This season' : `${f.seasonYear} season`, f.live && !f.rev ? 'Just begun' : `${money(f.rev)} earned, ${ordinal(f.rank)} of ${f.of} on the bay`],
-    ['On the exchange', `${money(f.value)}, ${fmtPx(sharePrice('me'))} a share`], ...(f.filled ? [['Contracts filled', String(f.filled)]] : [])];
+    ...(S.mkt.me.mine < SHARES ? [['On the exchange', `${fmtPx(sharePrice('me'))} a share`]] : []), ...(f.filled ? [['Contracts filled', String(f.filled)]] : [])];
   g.textAlign = 'left';
   const step = Math.min(62, (H - 100 - top) / rows.length);
   rows.forEach(([k, v], i) => { const y = top + 34 + i * step; g.font = `17px ${FONT_UI}`; g.fillStyle = INK2; g.fillText(k.toUpperCase(), 70, y); g.font = `bold 25px ${FONT_UI}`; g.fillStyle = INK; g.fillText(v, 70, y + 26); });
@@ -5381,7 +5392,7 @@ async function shareCard() {
   g.font = `bold 18px ${FONT_UI}`; g.textAlign = 'left'; g.fillText('TUGBOAT TYCOON', 62, H - 46); g.font = `18px ${FONT_UI}`; g.fillStyle = INK2; g.textAlign = 'right'; g.fillText('Georgian Bay and the North Channel, from 1870', W - 62, H - 46);
   return new Promise(res => c.toBlob(res, 'image/png'));
 }
-// The card is made ahead, while the share button is on screen, so the tap can go straight to the share sheet
+// The card is made ahead, while the share button is on screen, so the page can show it at once
 const shareCache = { key: '', blob: null, busy: null, at: 0 };
 const shareKey = () => [S.company, S.year, Math.floor(S.day), Math.round(netWorth() / 100)].join('|');
 function shareWarm(force) {
@@ -5390,42 +5401,75 @@ function shareWarm(force) {
   return shareCache.busy = shareCard().then(b => { shareCache.blob = b; shareCache.key = key; }).catch(() => {}).finally(() => { shareCache.busy = null; });
 }
 document.addEventListener('pointerdown', e => { if (S && e.target.closest && e.target.closest('[data-act="share"]')) shareWarm(true); }, true);
-async function shareCompany() {
-  if (shareCache.busy) await Promise.race([shareCache.busy, new Promise(r => setTimeout(r, 450))]);
-  const text = shareText(), title = `${S.company}, ${S.year}`, blob = shareCache.blob;
-  const file = blob && typeof File === 'function' ? new File([blob], `tugboat-tycoon-${S.year}.png`, { type: 'image/png' }) : null;
-  if (navigator.share) {
-    try {
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text, title });
-      else await navigator.share({ text, title });
-      return;
-    } catch (e) { if (e && e.name === 'AbortError') return; /* not allowed here: offer the other ways */ }
-  }
-  showModal(shareHTML(text, null));
-  const b = blob && shareCache.key === shareKey() ? blob : await shareCard().catch(() => null);
-  if (b) { shareCache.blob = b; const img = $('#modalBody .sharecard'); if (img) { img.src = URL.createObjectURL(b); img.hidden = false; } }
+// What the page shows is what gets sent: the message and the card as they were when it opened
+const SHARE = { text: '', blob: null, url: '' };
+const shareFile = () => SHARE.blob && typeof File === 'function' ? new File([SHARE.blob], `tugboat-tycoon-${S.year}.png`, { type: 'image/png' }) : null;
+function shareCompany() {
+  SHARE.text = shareText(); SHARE.blob = null;
+  showModal(shareHTML(SHARE.text), 'wide');
+  const show = () => {
+    if (shareCache.key !== shareKey() || !shareCache.blob) return;
+    SHARE.blob = shareCache.blob; if (SHARE.url) URL.revokeObjectURL(SHARE.url); SHARE.url = URL.createObjectURL(SHARE.blob);
+    const ph = $('#modalBody .sharecard.wait'); if (!ph) return;
+    const img = new Image(); img.className = 'sharecard'; img.alt = ph.getAttribute('aria-label'); img.src = SHARE.url; ph.replaceWith(img);
+  };
+  if (shareCache.key === shareKey() && shareCache.blob) show(); else Promise.resolve(shareWarm(true)).then(show);
 }
 function shareHTML(text) {
   const mail = `mailto:?subject=${encodeURIComponent(`${S.company}, ${S.year}`)}&body=${encodeURIComponent(text)}`, sms = `sms:?&body=${encodeURIComponent(text)}`;
+  const sheet = typeof navigator.share === 'function', where = GAME_URL.replace(/^https?:\/\//, '').replace(/\/$/, '');
   return `<div class="rules"><span>${fmtDate(S.day)}</span><span>Share</span></div>
   <h2>Share how you're doing</h2>
-  <img class="sharecard" alt="A newspaper card with your company's figures" hidden>
-  <textarea class="sharetext" readonly rows="6" aria-label="The message">${esc(text)}</textarea>
-  <div class="row"><button class="btn primary wide" data-act="shareCopy">Copy the message</button><a class="btn wide" href="${esc(mail)}" target="_blank" rel="noopener">Email it</a></div>
-  <div class="row"><a class="btn wide" href="${esc(sms)}" target="_blank" rel="noopener">Text message</a><button class="btn wide" data-act="shareSave">Save the picture</button></div>
-  <p class="fine">Copy the message to paste into Messages, Mail or anywhere else. Save the picture to send it with the message.</p>
+  <div class="sharegrid"><div>
+  <div class="sharecard wait" role="img" aria-label="A newspaper card with your company's figures">Setting the type…</div>
+  <details class="specsheet sharemsg"><summary>The message that goes with it</summary><p>${esc(text)}</p></details>
+  </div><div>
+  ${sheet ? `<div class="row"><button class="btn primary wide" data-act="shareSheet">${SHARE_ICON}Send the picture and message</button></div>` : ''}
+  <div class="row"><a class="btn wide${sheet ? '' : ' primary'}" href="${esc(sms)}">Text message</a><a class="btn wide" href="${esc(mail)}">Email</a></div>
+  <div class="row"><button class="btn wide" data-act="shareCopy">Copy the message</button><button class="btn wide" data-act="shareSave">Save the picture</button></div>
+  <p class="fine">${sheet ? 'Send opens the share sheet (Messages, Mail, AirDrop and more) with the picture and message together. ' : ''}Text message and Email send just the message.</p>
+  <h3>Invite someone to play</h3>
+  <div class="row"><button class="btn wide" data-act="shareLink">${sheet ? 'Send them the link' : 'Copy the link'}</button></div>
+  <p class="fine">Just the game's address, ${esc(where)}, without your figures.</p>
+  </div></div>
   <div class="row"><button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
 }
-async function shareCopy() {
-  const text = shareText();
-  try { await navigator.clipboard.writeText(text); toast('Copied. Paste it into a message or an email.'); return; } catch (e) { /* the page may not be allowed the clipboard: select and copy instead */ }
-  const ta = $('#modalBody .sharetext'); if (ta) { ta.focus(); ta.select(); try { if (document.execCommand('copy')) { toast('Copied. Paste it into a message or an email.'); return; } } catch (e) { /* fall through */ } }
-  toast('Select the message and copy it.', true);
+// The share sheet needs the tap that opened it, so the picture has to be ready by then; the page makes it while it opens
+async function shareSheet() {
+  const file = shareFile(), title = `${S.company}, ${S.year}`;
+  try {
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], text: SHARE.text, title });
+    else await navigator.share({ text: SHARE.text, title });
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    toast(file ? 'The share sheet would not open here. Copy the message and save the picture instead.' : 'The picture is still being made. Try again in a moment.', true);
+  }
 }
+async function shareLink() {
+  const text = 'Come and play Tugboat Tycoon, a tugboat company on Georgian Bay from 1870.';
+  if (typeof navigator.share === 'function') {
+    try { await navigator.share({ title: 'Tugboat Tycoon', text, url: GAME_URL }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  copyText(`${text} ${GAME_URL}`, 'Link copied. Paste it into a message or an email.');
+}
+async function copyText(text, done) {
+  try { await navigator.clipboard.writeText(text); toast(done); return; } catch (e) { /* the page may not be allowed the clipboard: copy from a hidden box instead */ }
+  const ta = document.createElement('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+  document.body.appendChild(ta); ta.focus(); ta.select(); ta.setSelectionRange(0, text.length);
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { /* not allowed */ }
+  ta.remove();
+  if (ok) toast(done); else toast('Copying is not allowed here. Open The message that goes with it and copy it from there.', true);
+}
+const shareCopy = () => copyText(SHARE.text || shareText(), 'Copied. Paste it into a message or an email.');
 async function shareSave() {
-  const b = shareCache.blob && shareCache.key === shareKey() ? shareCache.blob : await shareCard().catch(() => null); if (!b) return;
+  const b = SHARE.blob || (shareCache.key === shareKey() && shareCache.blob) || await shareCard().catch(() => null); if (!b) return;
   const name = `tugboat-tycoon-${S.year}.png`, cl = window.claude, dl = cl && typeof cl.use === 'function' ? await cl.use('downloads').catch(() => null) : null;
   if (dl) { try { await dl.save({ filename: name, data: b }); } catch (e) { if (e && e.code !== 'declined') toast('The picture could not be saved here.', true); } return; }
+  const file = typeof File === 'function' ? new File([b], name, { type: 'image/png' }) : null;
+  // on an iPad a download goes to the Files app; the share sheet's Save Image puts it in Photos
+  if (file && /iPad|iPhone|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
   const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
 }
 function titleHTML(saved) {
@@ -5591,12 +5635,14 @@ function menuHTML() {
   return `<h2>Menu</h2>
   <div class="row"><button class="btn wide" data-act="save">Save game</button><button class="btn wide" data-act="load" ${saved ? '' : 'disabled'}>Load saved game${saved ? ' (' + saved.year + ')' : ''}</button></div>
   ${canFull() ? `<div class="row"><button class="btn wide" data-act="fullScreen">${isFull() ? 'Leave full screen' : 'Play full screen'}</button></div>` : ''}
+  <h3>Share</h3>
+  <div class="row"><button class="btn wide" data-act="share">${SHARE_ICON}Share how you're doing</button>${BOARD.on ? '<button class="btn wide" data-act="board">Scoreboard</button>' : ''}</div>
+  <p class="fine">Send family and friends a picture of how your company is doing, or invite them to play.</p>
   <h3>Another device</h3>
   <div class="row"><button class="btn wide" data-act="sendGame">Send this game</button><button class="btn wide" data-act="loadGameFile">Load a game from a file</button></div>
   <p class="fine">Your game is kept on this device only. To carry on somewhere else, send it (by Mail, Messages, AirDrop or anything that sends a file), then open the game there and load the file.</p>
   ${ui.confirmNew ? `<div class="confirm"><b>Start over in 1870? This game will be lost unless you saved it.</b><div class="row"><button class="btn danger wide" data-act="newGameYes">Start over</button><button class="btn wide" data-act="newGameNo">Keep playing</button></div></div>` : '<button class="btn" data-act="newGame">New game</button>'}
   ${playLog.owner && playLog.db ? '<div class="row"><button class="btn wide" data-act="players">Who\'s been playing</button></div>' : ''}
-  ${BOARD.on ? '<div class="row"><button class="btn wide" data-act="board">Scoreboard</button></div>' : ''}
   ${soundMenuHTML()}
   ${gfxMenuHTML()}
   <h3>How to play</h3>
@@ -5627,6 +5673,8 @@ const ACTS = {
   loadGameYes: () => { if (!pendingGame) return; boardStart(); S = pendingGame; pendingGame = null; afterLoad(); saveGame(true); ui.queue = []; closeModal(); toast(`Loaded ${S.company}, ${S.year}.`); },
   shareCopy: () => shareCopy(),
   shareSave: () => shareSave(),
+  shareSheet: () => shareSheet(),
+  shareLink: () => shareLink(),
   sound: () => setSound(!SND.on),
   soundCheck: () => soundCheck(),
   gfxSet: el => { const sc = $('#modalBody').scrollTop; gfxSet(el.dataset.v === '1'); showModal(menuHTML()); $('#modalBody').scrollTop = sc; },
