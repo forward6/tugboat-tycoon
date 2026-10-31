@@ -5852,13 +5852,15 @@ const deviceName = () => { const u = navigator.userAgent; return /iPad/.test(u) 
 function boardReport(start, leaving) {
   if (!BOARD.on || !S || navigator.onLine === false) return;
   const t = performance.now(), minutes = BOARD.mark ? Math.min(15, (t - BOARD.mark) / 60000) : 0; BOARD.mark = leaving ? 0 : t;
-  const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, company: S.company, year: S.year, worth: Math.round(nw), title: titleFor(nw),
+  const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, worth: Math.round(nw), title: titleFor(nw),
     boats: S.tugs.filter(x => x.owner === 'p').length, device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
   try {
     if (leaving && navigator.sendBeacon) navigator.sendBeacon('api/board', new Blob([body], { type: 'application/json' }));
     else fetch('api/board', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
   } catch (e) { /* offline, or no scoreboard */ }
 }
+// a new or loaded game reports at once, so the board never shows the last one
+const boardNow = () => { if (!BOARD.started) boardStart(); else boardReport(); };
 function boardStart() {
   if (!BOARD.on || BOARD.started) return; BOARD.started = true; BOARD.mark = performance.now(); boardReport(true);
   setInterval(() => { if (!document.hidden) boardReport(); }, 5 * 60000);
@@ -5878,13 +5880,20 @@ function boardHTML(data) {
   const head = `<div class="rules"><span>Tugboat Tycoon</span><span>Who's playing</span></div><h2>Scoreboard</h2>`, close = '<div class="row"><button class="btn primary wide" data-act="closeModal">Close</button></div>';
   if (!data) return `${head}<p class="desc">The scoreboard needs a connection. Try again when you're online.</p>${close}`;
   if (data.off) return `${head}<p class="desc">The scoreboard isn't switched on yet.</p>${close}`;
-  const ps = (data.players || []).slice().sort((a, b) => (b.worth || 0) - (a.worth || 0));
-  const row = (p, i) => `<li><div class="item board${p.id === BOARD.id ? ' you' : ''}"><span class="rank">${i + 1}</span><span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">You</span>' : ''}</b>
-    <small>${esc(p.company || '')}${p.year ? `, ${p.year}` : ''} · ${p.boats || 0} boat${p.boats === 1 ? '' : 's'}</small>
-    <small>Last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${p.app ? 'the' : /^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}${p.app ? ' home screen' : ''}` : ''} · ${playedText(p.minutes || 0)} in all</small></span>
-    <span class="side">${money(p.worth || 0)}<small>${esc(p.title || '')}</small></span></div></li>`;
+  const best = p => p.best && p.best.worth != null ? p.best : { worth: p.worth || 0, company: p.company, year: p.year, title: p.title, game: p.game };
+  const ps = (data.players || []).slice().sort((a, b) => (best(b).worth || 0) - (best(a).worth || 0));
+  const row = (p, i) => {
+    const b = best(p), same = b.game ? b.game === p.game : b.company === p.company;
+    const now = same ? `Still playing it, now in ${p.year}${(p.worth || 0) < b.worth ? `, worth ${money(p.worth || 0)}` : ''}` : `Now playing ${esc(p.company || 'a new company')}: ${p.year}, worth ${money(p.worth || 0)}`;
+    const games = p.gamesPlayed || 1;
+    return `<li><div class="item board${p.id === BOARD.id ? ' you' : ''}"><span class="rank">${i + 1}</span><span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">You</span>' : ''}</b>
+    <small>Best: ${esc(b.company || '')} · ${esc(b.title || '')}${b.year ? ` · ${b.year}` : ''}</small>
+    <small>${now}</small>
+    <small>Last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${p.app ? 'the' : /^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}${p.app ? ' home screen' : ''}` : ''} · ${playedText(p.minutes || 0)} in all · ${games} game${games === 1 ? '' : 's'}</small></span>
+    <span class="side">${money(b.worth || 0)}<small>best</small></span></div></li>`;
+  };
   return `${head}${ps.length ? `<ul class="list">${ps.map(row).join('')}</ul>` : '<p class="desc">No one has played yet.</p>'}
-  <p class="fine">Ranked by what each company is worth. A game reports in every few minutes while it's open.</p>
+  <p class="fine">Ranked by each player's best game: the most any of their companies has been worth. Starting a new game never lowers it. A game reports in when it starts and every few minutes while it's open.</p>
   ${boardNameHTML('board')}${close}`;
 }
 /* ---------- The bay's history, 1870 to today: real events on and around Georgian Bay, and what shaped it ----------
@@ -6040,7 +6049,7 @@ const ACTS = {
   share: () => shareCompany(),
   sendGame: () => sendGame(),
   loadGameFile: () => pickGameFile(),
-  loadGameYes: () => { if (!pendingGame) return; boardStart(); S = pendingGame; pendingGame = null; afterLoad(); saveGame(true); ui.queue = []; closeModal(); toast(`Loaded ${S.company}, ${S.year}.`); },
+  loadGameYes: () => { if (!pendingGame) return; S = pendingGame; pendingGame = null; afterLoad(); saveGame(true); ui.queue = []; closeModal(); boardNow(); toast(`Loaded ${S.company}, ${S.year}.`); },
   shareCopy: () => shareCopy(),
   shareSave: () => shareSave(),
   shareSheet: () => shareSheet(),
@@ -6149,10 +6158,10 @@ const ACTS = {
   tourSkip: () => endTour(true),
   continue: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); } closeModal(); boardStart(); },
   save: () => { saveGame(false); closeModal(); },
-  load: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); toast(`Loaded your ${S.year} game.`); } closeModal(); },
+  load: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); boardNow(); toast(`Loaded your ${S.year} game.`); } closeModal(); },
   newGame: () => { ui.confirmNew = true; showModal(menuHTML()); },
   newGameNo: () => { ui.confirmNew = false; showModal(menuHTML()); },
-  newGameYes: () => { ui.queue = []; newGame(); afterLoad(); closeModal(); boardStart(); if (!tourSeen()) startTour(); },
+  newGameYes: () => { ui.queue = []; newGame(); afterLoad(); closeModal(); boardNow(); if (!tourSeen()) startTour(); },
   startSeason: () => { closeModal(); startSeason(); saveGame(true); },
   newsAll: () => { select(null); $('#panel').classList.remove('collapsed'); },
 };
@@ -6189,6 +6198,7 @@ function toast(text, bad) {
 function migrate() {
   for (const t of S.tugs) { if (OLD_MODELS[t.model]) t.model = OLD_MODELS[t.model]; if (t.earnTotal == null) t.earnTotal = t.earn || 0; }
   if (S.contracts) S.contracts = S.contracts.filter(k => k.state !== 'tender');
+  if (!S.gameId) S.gameId = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => (b % 36).toString(36)).join('');
   for (const p of PORTS) if (!S.ports[p.id]) S.ports[p.id] = { stock: {}, glut: {}, millQ: 0, fishGlut: 0, built: {}, ice: 0 };
   if (S.premiumUntil == null) S.premiumUntil = S.premiumMult > 1 ? 1884 : 0;
   if (S.rank == null) S.rank = rankIdx(netWorth());
