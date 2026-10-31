@@ -61,7 +61,7 @@ The country has real relief, from Mapzen's terrain tiles (open data on Amazon, f
 
 ## Hosting: GitHub and Cloudflare Pages
 
-The sources live in a GitHub repository; Cloudflare Pages builds and serves the standalone copy from it, and builds again on every push to `main`. Its settings: framework preset None, build command `python3 tools/build.py && python3 tools/site.py`, build output directory `site`. The built files (`index.html`, `site/`, `dist/`) are not kept in the repository. Added to an iPad's home screen, the site opens full screen like an app.
+The sources live in a GitHub repository; Cloudflare Pages builds and serves the standalone copy from it, and builds again on every push to `main`. Its settings: framework preset None, build command `python3 tools/build.py && python3 tools/site.py`, build output directory `site`. The built files (`index.html`, `site/`, `dist/`) are not kept in the repository. Added to an iPad's home screen, the site opens full screen like an app. The game is played at https://tugboat-tycoon.pages.dev; the earlier claude.ai artifact is no longer updated.
 
 ## The standalone copy
 
