@@ -263,6 +263,7 @@ table.cargo td.n{text-align:right}
 .tl-card h4{margin:0;font-family:var(--font-display);font-weight:400;font-size:21px;line-height:1.15}
 .tl-card p{margin:0}
 .tl-card .soon{font-size:12.5px;color:var(--magenta);font-weight:700}
+.harbourpick{flex:1;min-width:0;font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
 .riverpick{display:flex;flex-direction:column;gap:3px;grid-column:1/-1}
 .riverpick select{font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
 .item small.oncontract{color:var(--magenta);font-weight:700}
@@ -700,6 +701,9 @@ const EVENTS = [
   { id: 'woodwrecker', date: [1874, 5, 1], head: 'Wrecking tugs',
     body: 'The yards are fitting out wooden tugs for wreck work, with steam pumps, a derrick, heavy hawsers and a diver\'s outfit.',
     effect: ['New boat for sale: Wooden wrecking tug. She takes on any salvage and earns a quarter more for it.'] },
+  { id: 'harbourwork', date: [1876, 5, 1], head: 'Tugs wanted in the harbours',
+    body: 'With more steamers and bigger schooners calling every season, the harbour masters want tugs on hand to tow the sailing ships in and out and ease the steamers alongside.',
+    effect: ['A towing tug can now be stationed at a port for harbour work, earning a fee for every lake ship that comes in or goes out: see her page.'] },
   { id: 'refit', date: [1880, 4, 1], head: 'Compound engines for old tugs',
     body: 'The shipyards will take out a tug\'s old single-cylinder engine and fit a compound engine and a coal-fired boiler.',
     effect: ['A simple-engine tug can now be refitted with a compound engine: see her page.'] },
@@ -1136,7 +1140,7 @@ const closedSeason = (day = S.day) => day >= D.fisheries && monthOf(day) === 11;
 /* =====================================================================
    New game
    ===================================================================== */
-function newLedger(year) { return { year, logs: 0, lumber: 0, coal: 0, supplies: 0, fish: 0, tows: 0, salvage: 0, insurance: 0, sales: 0,
+function newLedger(year) { return { year, logs: 0, lumber: 0, coal: 0, supplies: 0, fish: 0, grain: 0, tows: 0, harbour: 0, salvage: 0, insurance: 0, sales: 0,
   running: 0, repairs: 0, refit: 0, premiums: 0, interest: 0, licences: 0, fines: 0, nets: 0, ice: 0, penalties: 0, capital: 0 }; }
 function newGame(seed) {
   S = { v: 1, seed: (seed || (Date.now() & 0x7fffffff)) | 0, day: dayOf(1870, 4, 20), year: 1870, season: true, seasonClose: dayOf(1870, 12, 6),
@@ -1663,7 +1667,7 @@ function checkEvents() {
     if (e.id === 'asia') { if (S.season) S.weather.today = { k: 'gale', dir: 'NW' }; S.premiumMult = 1.5; S.premiumUntil = 1884; }
     if (e.id === 'storm1913') { S.premiumMult = 1.5; S.premiumUntil = 1914; }
     addNews(e.head + '. ' + e.body);
-    if (e.major || EVENT_BOAT[e.id] || e.id === 'refit') queueModal(() => newspaperHTML(e));
+    if (e.major || EVENT_BOAT[e.id] || e.id === 'refit' || e.id === 'harbourwork') queueModal(() => newspaperHTML(e));
     else toast(e.head);
   }
 }
@@ -1783,6 +1787,7 @@ function canSail(t) {
 function nextGoal(t) {
   if (t.layup) return { t: 'port', id: t.layup };
   if (isFish(t)) return t.ground && t.home ? { t: 'ground', id: t.ground } : null;
+  if (t.harbour && !isFish(t)) return t.at === t.harbour ? null : { t: 'port', id: t.harbour };
   if (t.route.length >= 2) return { t: 'port', id: t.route[t.ri % t.route.length] };
   return t.owner === 'r' && t.station && t.at !== t.station && portOpen(t.station) ? { t: 'port', id: t.station } : null;
 }
@@ -1820,6 +1825,7 @@ function arrive(t) {
       return;
     }
     if (t.route.length >= 2 && t.route[t.ri % t.route.length] === g.id) { routeStop(t, g.id); return; }
+    if (t.harbour === g.id) harbourUnload(t, g.id);
     t.state = 'port'; t.timer = .1; return;
   }
   if (g.t === 'ground') { workNets(t); return; }
@@ -2552,7 +2558,7 @@ function netWorth() {
   for (const p of PORTS) { const b = S.ports[p.id].built; if (b.icehouse) v += 700; if (b.coaldock) v += 1500; }
   return v + (S.mkt ? holdingsValue() : 0);
 }
-const ledgerRevenue = L => L.logs + L.lumber + L.coal + L.supplies + L.fish + L.tows + L.salvage + L.insurance + (L.divIn || 0);
+const ledgerRevenue = L => L.logs + L.lumber + L.coal + L.supplies + L.fish + L.tows + L.salvage + (L.harbour || 0) + (L.grain || 0) + L.insurance + (L.divIn || 0);
 const ledgerCost = L => L.running + L.repairs + L.refit + L.premiums + L.interest + L.licences + L.fines + L.nets + L.ice + (L.divOut || 0) + (L.penalties || 0);
 
 /* =====================================================================
@@ -2603,12 +2609,12 @@ function startSeason() {
       const r = (100 - t.hull) * 9 + t.price * .02, pr = tugValue({ ...t, hull: 100 }) * .04 * S.premiumMult, li = isFish(t) && open >= D.fisheries ? 40 : 0;
       refit += r; prem += pr; lic += li; own = r + pr + li;
     }
-    t.hull = 100; t.earn = 0; t.cost = own;
+    t.hull = 100; t.earn = 0; t.cost = own; t.calls = 0;
   }
   for (const p of PORTS) { const P = S.ports[p.id]; if (P.built.icehouse) { ice += (120 - P.ice) * 1.5; P.ice = 120; } P.glut = {}; P.fishGlut = 0; P.shipped = { rail: 0, road: 0, lake: 0 }; P.lakeQ = 0; }
   S.ledger.refit = refit; S.ledger.premiums = prem; S.ledger.licences = lic; S.ledger.ice = ice;
   S.cash -= interest + refit + prem + lic + ice;
-  S.year = y; S.day = open; S.seasonOpen = open; S.seasonClose = dayOf(y, 12, 3) + Math.floor(rand() * 8);
+  S.year = y; S.day = open; S.seasonOpen = open; S.calls = {}; S.seasonClose = dayOf(y, 12, 3) + Math.floor(rand() * 8);
   S.weather = { today: { k: 'moderate', dir: 'SW' }, tomorrow: rollWeather(open + 1), warn: false, galeLeft: 0 };
   // this spring's log drives
   for (const pid of ['french', 'spanish', 'byng', 'moonriver']) {
@@ -2678,7 +2684,7 @@ function build(what, pid) {
 function loanLimit() { return 20000 + .4 * Math.max(0, netWorth() + S.loans); }
 function startRouteEdit(t) { ui.mode = { type: 'route', tugId: t.id, stops: [] }; ui.panelDirty = true; }
 function saveRoute(t, stops) {
-  t.route = stops.slice(); t.ri = 0;
+  t.route = stops.slice(); t.ri = 0; t.harbour = null;
   if (!S.season) return;
   if (t.job || t.jobTow) return;
   if (t.state === 'sail' || t.state === 'idle' || t.state === 'port' || t.state === 'wait') {
@@ -3493,6 +3499,42 @@ function shipByLake(pid, cargo, n) {
   const y = yearOf(S.day), dest = wpick({ tonawanda: 6, buffalo: 1.5, toledo: .5, detroit: .5 }), type = shipType(cargo, y);
   if (type && addShip(type, cargo, OFFMAP[dest][1], pid, OFFMAP[dest][1], 'export', { dest, yours: true, loads: Math.round(P.lakeQ) })) P.lakeQ = 0;
 }
+/* ---------- harbour work: from 1876 a tug stationed at a port tows the sailing ships in and out and eases the steamers
+   alongside, for a fee each time a lake ship comes in or goes out. Other companies' tugs lying at the same port share
+   the work. ---------- */
+const HARBOUR_FROM = 1876;
+const harbourOpen = () => yearOf(S.day) >= HARBOUR_FROM;
+const canHarbour = t => t.owner === 'p' && !isFish(t) && !isWarp(t) && !MODELS[t.model].hooker;
+function harbourFee(v, dir) {
+  const T = SHIP_TYPES[v.type] || {}, y = yearOf(S.day);
+  let f = T.sail ? 30 + 5 * (T.sail - 2) : v.type === 'steambarge' ? 20 + 8 * ((v.consorts || []).length) : v.type === 'laker' ? 32 + (v.lenFt > 400 ? 14 : 0) : v.type === 'passenger' ? 20 : 22;
+  if (T.sail && S.weather.today.k === 'calm') f *= 1.3; // a schooner can't get in or out at all without a tow in a calm
+  return Math.round(f * (dir === 'out' ? .75 : 1) * (1 + (y - 1870) / 80));
+}
+function harbourWork(v, dir) {
+  const pid = v.port; if (!pid || !S.season) return;
+  S.calls = S.calls || {}; if (dir === 'in') S.calls[pid] = (S.calls[pid] || 0) + 1;
+  if (!harbourOpen()) return;
+  const ready = t => t.at === pid && (t.state === 'idle' || t.state === 'port') && !t.job && !t.jobTow;
+  const mine = S.tugs.filter(t => t.owner === 'p' && t.harbour === pid && ready(t));
+  const theirs = S.tugs.filter(t => t.owner === 'r' && !t.route.length && t.station === pid && !isFish(t) && !isWarp(t) && ready(t));
+  if (!mine.length && !theirs.length) return;
+  const fee = harbourFee(v, dir);
+  if (Math.random() < mine.length / (mine.length + theirs.length * .8)) { const t = pick(mine); credit(t, fee, 'harbour', pid); t.calls = (t.calls || 0) + 1; }
+  else { const t = pick(theirs); credit(t, fee, 'tows', pid); }
+}
+// Station her at a port for harbour work, or take her off it
+function setHarbour(t, pid) {
+  if (!canHarbour(t) || !PORT[pid]) return;
+  t.harbour = pid; t.route = []; t.ri = 0; t.calls = t.calls || 0;
+  if (!S.season || t.job || t.jobTow || t.state === 'laid') return;
+  if (t.at === pid && t.state !== 'sail') { harbourUnload(t, pid); goIdle(t); } else setCourse(t, { t: 'port', id: pid });
+}
+// Whatever she has in tow when she takes up harbour work is sold at her port if it fetches anything there, or left on the wharf
+function harbourUnload(t, pid) {
+  for (const g of t.tow) { const v = valueAt(t, pid, g.c, g.from); if (v > 0) payCargo(t, pid, g, v); }
+  t.tow = []; t.boom = false;
+}
 function shipArrives(v) {
   const P = v.port && S.ports[v.port];
   if (v.mode === 'export') { v.loaded = true; if (P) { P.shipped = P.shipped || { rail: 0, road: 0, lake: 0 }; P.shipped.lake = (P.shipped.lake || 0) + 1; } }
@@ -3501,14 +3543,14 @@ function shipArrives(v) {
 function moveTraffic(days) {
   for (let i = vehicles.length - 1; i >= 0; i--) {
     const v = vehicles[i];
-    if (v.dwell > 0) { v.dwell -= days; if (v.dwell <= 0 && v.ship && v.atPort) { shipArrives(v); v.atPort = null; } continue; }
+    if (v.dwell > 0) { v.dwell -= days; if (v.dwell <= 0 && v.ship && v.atPort) { shipArrives(v); harbourWork(v, 'out'); v.atPort = null; } continue; }
     v.s += v.v * days * (v.ship ? shipSpeedFactor(v) * portEase(v) : 1);
     const stop = v.P.stops[v.si];
     if (stop != null && v.s >= stop) { v.s = stop; v.si++; v.dwell = v.kind === 'train' ? .03 : .01; }
     if (v.s >= v.P.len) {
       if (v.ship && v.leg < v.legs.length - 1) {
         // alongside the wharf: a few days to load lumber by hand, less for coal and grain
-        v.leg++; v.P = v.legs[v.leg]; v.s = 0; v.atPort = v.port;
+        v.leg++; v.P = v.legs[v.leg]; v.s = 0; v.atPort = v.port; harbourWork(v, 'in');
         v.dwell = SHIP_TYPES[v.type].sail ? rnd(1.2, 2.2) : v.cargo === 'lumber' || v.cargo === 'pulpwood' ? rnd(.8, 1.5) : rnd(.4, .9);
         continue;
       }
@@ -4927,6 +4969,8 @@ function statusOf(t) {
     const why = t.note === 'closed' ? 'Tied up for the November closed season' : t.goal && t.goal.shelter ? 'Sheltering from the gale' : t.note === 'gale' ? 'Weatherbound in the gale' : 'Weatherbound, gale forecast';
     return `${why} at ${at}.`;
   }
+  if (t.harbour && t.at === t.harbour && (t.state === 'idle' || t.state === 'port')) return `Harbour work at ${at}: towing the sailing ships in and out and easing the steamers alongside.`;
+  if (t.harbour && t.state === 'sail' && t.goal && t.goal.id === t.harbour) return `Bound for ${PORT[t.harbour].name} for harbour work.`;
   if (t.state === 'idle') return t.owner === 'r' ? `Lying at ${at}, ready for salvage and harbour work.` : isFish(t) ? `Idle at ${at}. Choose a fishing ground.` : `Idle at ${at}. Give her a route.`;
   if (t.goal && t.goal.shelter) return `Running for shelter at ${goalName(t.goal)}.`;
   if (isFish(t)) {
@@ -5523,6 +5567,8 @@ function tugHTML(t) {
     <button class="btn" data-act="editRoute">${t.route.length >= 2 ? 'Change route' : 'Set a route'}</button>
     <p class="fine">At each stop the captain delivers cargo that pays here and loads whatever pays best further along the route. ${m.hooker ? 'She carries logs as cargo, never in a boom.' : 'Logs go in a boom: three times the load, but slow.'}</p>`;
   }
+  if (!isFish(t) && t.harbour) orders = harbourHTML(t);
+  else if (!isFish(t) && canHarbour(t) && harbourOpen() && S.season) orders += harbourOfferHTML(t);
   const towing = isFish(t) ? '' : m.hooker ? `<h3>Aboard and in tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing aboard.'}</p>` : `<h3>In tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing in tow.'}</p>
     ${jobs.length ? `<h3>Tow wanted</h3><ul class="list">${jobs.map(j => `<li><button class="item" data-act="select" data-t="job" data-id="${j.id}">${jobGlyph(j)}<span><b>${esc(j.name)}</b><small>${esc(j.where)} → ${PORT[j.dest].name}</small></span><span class="side">${money(j.reward)}</span></button></li>`).join('')}</ul>` : ''}`;
   const sell = ui.confirmSell === t.id
@@ -5544,6 +5590,21 @@ function tugHTML(t) {
   ${layupHTML(t)}
   <div class="row"><button class="btn ghost wide" data-act="renameTug">Rename her</button></div>
   ${sell}`;
+}
+// Harbour work on her page: where she's stationed and what it has brought in, or the offer to station her somewhere
+const callsAt = pid => (S.calls || {})[pid] || 0;
+function harbourHTML(t) {
+  const pid = t.harbour, mine = S.tugs.filter(o => o.owner === 'r' && !o.route.length && o.station === pid && !isFish(o) && !isWarp(o)).length;
+  return `<h3>Harbour work</h3>
+  <p class="fine">Stationed at ${PORT[pid].name}: she tows the sailing ships in and out and eases the steamers alongside, for a fee each time a lake ship comes in or goes out. ${callsAt(pid) ? `${callsAt(pid)} lake ship${callsAt(pid) === 1 ? ' has' : 's have'} called at ${PORT[pid].name} this season; she has` : 'She has'} ${t.calls ? `been paid for ${t.calls} of the comings and goings.` : 'had no work yet this season.'}${mine ? ` ${mine === 1 ? 'Another company\'s tug lies here too and takes' : `${mine} other companies' tugs lie here too and take`} a share of the work.` : ''}</p>
+  <div class="row"><button class="btn wide" data-act="editRoute">Put her back on a route</button></div>
+  <p class="fine">She can still race out to a tow or a wreck from here, and comes back after.</p>`;
+}
+function harbourOfferHTML(t) {
+  const ports = PORTS.filter(p => portOpen(p.id) && !usPort(p.id)).map(p => p.id).sort((a, b) => callsAt(b) - callsAt(a) || (a === t.at ? -1 : b === t.at ? 1 : 0));
+  return `<h3>Harbour work</h3>
+  <div class="row"><select id="harbourPort" class="harbourpick" aria-label="Port for harbour work">${ports.map(id => `<option value="${id}" ${id === (t.at || ports[0]) ? 'selected' : ''}>${esc(PORT[id].name)}${callsAt(id) ? ` · ${callsAt(id)} ship${callsAt(id) === 1 ? '' : 's'} this season` : ''}</option>`).join('')}</select><button class="btn" data-act="harbourOn">Station her there</button></div>
+  <p class="fine">Instead of a route, she stays in port and earns a fee each time a lake ship comes in or goes out. Busy ports pay best; other companies' tugs lying there share the work.</p>`;
 }
 // The compound refit: offered to a simple-engine tug from 1880
 function refitHTML(t) {
@@ -6184,19 +6245,20 @@ const homeHint = () => !inClaude && !asApp() && matchMedia('(pointer: coarse)').
 const EVENT_BOAT = { hooker: 'hooker', woodwrecker: 'woodwrecker', alligator: 'alligator', steamfish: 'steamfish', steel: 'steelcompound', wrecker: 'steelwrecker',
   lifter: 'liftertug', gasfish: 'gasfish', dieselfish: 'dieselfish', dieseltug: 'diesel' };
 function newspaperHTML(e) {
-  const model = EVENT_BOAT[e.id], m = model && MODELS[model], refit = e.id === 'refit';
-  const tugs = refit ? S.tugs.filter(t => canRefit(t) && !t.refit) : [];
+  const model = EVENT_BOAT[e.id], m = model && MODELS[model], refit = e.id === 'refit', hw = e.id === 'harbourwork';
+  const tugs = refit ? S.tugs.filter(t => canRefit(t) && !t.refit) : hw ? S.tugs.filter(canHarbour) : [];
   const boatBit = m ? `${planThumb('boat', model, 'the ' + m.name)}<p class="paper-ad"><b>${esc(m.name)}</b> · ${money(m.price)} at the yards · ${m.warp ? `brings a boom of about ${WARP_LOGS} loads of logs down a river each week` : m.kind === 'fish' ? `holds ${m.hold} tons, works ${esc(m.net)} yards of net` : m.hooker ? `carries ${m.power} loads, ${m.power + (m.deckLoad || 0)} of lumber` : `tows ${m.power} barges or a ${m.power * 3}-load boom`} · ${m.kn} knots</p>`
-    : refit ? `${planThumb('boat', 'woodrefit', 'a tug with her new compound engine')}<p class="paper-ad"><b>The compound refit</b> · ${money(REFIT_COST)} · about two weeks in the yard, or done over the winter</p>` : '';
+    : refit ? `${planThumb('boat', 'woodrefit', 'a tug with her new compound engine')}<p class="paper-ad"><b>The compound refit</b> · ${money(REFIT_COST)} · about two weeks in the yard, or done over the winter</p>`
+    : hw ? `${planThumb('boat', 'woodsimple', 'a harbour tug')}<p class="paper-ad"><b>Harbour work</b> · a fee for every lake ship your tug brings in or sees out · busy ports pay best</p>` : '';
   const go = m ? `<button class="btn wide" data-act="newsYard">See her at the shipyard</button>`
     : tugs.length ? `<button class="btn wide" data-act="newsTug" data-id="${tugs[0].id}">See ${esc(tugs[0].name)}</button>` : '';
   return `<div class="paper">
   <p class="mast">The Georgian Bay Courier</p>
-  <div class="rules"><span>${fmtDate(e.day)}</span><span>${m || refit ? 'At the shipyards' : 'Price two cents'}</span></div>
+  <div class="rules"><span>${fmtDate(e.day)}</span><span>${m || refit ? 'At the shipyards' : hw ? 'On the waterfront' : 'Price two cents'}</span></div>
   <p class="headline">${esc(e.head)}</p>
   ${boatBit}
   <p class="body">${esc(e.body)}</p></div>
-  ${e.effect || tugs.length ? `<div class="effects"><b>For your company</b><ul>${(e.effect || []).map(x => `<li>${esc(x)}</li>`).join('')}${refit ? `<li>${tugs.length ? `Your ${tugs.length === 1 ? 'tug that could have it' : 'tugs that could have it'}: ${esc(listAnd(tugs.map(t => t.name)))}.` : 'None of your tugs has the old simple engine.'}</li>` : ''}</ul></div>` : ''}
+  ${e.effect || tugs.length ? `<div class="effects"><b>For your company</b><ul>${(e.effect || []).map(x => `<li>${esc(x)}</li>`).join('')}${refit ? `<li>${tugs.length ? `Your ${tugs.length === 1 ? 'tug that could have it' : 'tugs that could have it'}: ${esc(listAnd(tugs.map(t => t.name)))}.` : 'None of your tugs has the old simple engine.'}</li>` : ''}${hw && tugs.length ? `<li>Any of your towing tugs can do it: ${esc(listAnd(tugs.map(t => t.name)))}.</li>` : ''}</ul></div>` : ''}
   <div class="row"><button class="btn primary wide" data-act="closeModal">Carry on</button>${go}</div>`;
 }
 // The season so far, boat by boat and share by share: tap "This season so far" on the company card
@@ -6235,7 +6297,7 @@ function ledgerRows(L) {
   const rev = ledgerRevenue(L) + L.sales, cost = ledgerCost(L);
   return `<table class="ledger"><tbody>
     <tr class="head"><td colspan="2">Earnings</td></tr>
-    ${r(L.year >= 1912 ? 'Pulpwood' : 'Logs', L.logs)}${r('Lumber', L.lumber)}${r('Coal', L.coal)}${r('Supplies', L.supplies)}${r('Fish', L.fish)}${r('Tows', L.tows)}${r('Salvage', L.salvage)}${r('Insurance claims', L.insurance)}${r('Dividends received', L.divIn)}${r('Boats and cargo sold', L.sales)}
+    ${r(L.year >= 1912 ? 'Pulpwood' : 'Logs', L.logs)}${r('Lumber', L.lumber)}${r('Coal', L.coal)}${r('Supplies', L.supplies)}${r('Fish', L.fish)}${r('Tows', L.tows)}${r('Harbour work', L.harbour)}${r('Salvage', L.salvage)}${r('Insurance claims', L.insurance)}${r('Dividends received', L.divIn)}${r('Boats and cargo sold', L.sales)}
     <tr><td><b>Total earnings</b></td><td>${money(rev)}</td></tr>
     <tr class="head"><td colspan="2">Expenses</td></tr>
     ${r('Crews and coal', L.running)}${r('Repairs', L.repairs)}${r('Winter refit', L.refit)}${r('Insurance', L.premiums)}${r('Interest', L.interest)}${r('Fishing licences', L.licences)}${r('Fines', L.fines)}${r('Lost nets', L.nets)}${r('Ice', L.ice)}${r('Contract penalties', L.penalties)}${r('Dividends paid', L.divOut)}
@@ -6598,6 +6660,7 @@ const ACTS = {
   yard: el => { ui.buyName = $('#tugName')?.value || ui.buyName; showModal(shipyardHTML(el.dataset.v)); },
   rename: () => { ui.buyName = newName('p'); showModal(shipyardHTML()); },
   buy: el => { const nm = ($('#tugName')?.value || '').trim().slice(0, 24) || ui.buyName; ui.buyName = null; buyTug(el.dataset.model, ui.yard, nm, $('#warpRiver')?.value); },
+  harbourOn: () => { const t = tugSel(), pid = $('#harbourPort')?.value; if (t && pid) { setHarbour(t, pid); toast(`${t.name} is on harbour work at ${PORT[pid].name}.`); } ui.panelDirty = true; },
   refit: () => { const t = tugSel(); if (t && orderRefit(t)) toast(S.season ? `${t.name} is bound for the yard.` : `${t.name} will have her new engine by spring.`); ui.panelDirty = true; },
   warpMove: el => { const t = tugSel(); if (t && warpMove(t, el.dataset.v)) toast(`${t.name} is on her way by rail.`); ui.panelDirty = true; },
   bank: () => showModal(bankHTML()),
