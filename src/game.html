@@ -494,10 +494,10 @@ const MODELS = {
                    spec: { like: 'the W. L. Wetmore (Cleveland, 1871), which carried Parry Sound lumber with her barges Brunette and James C. King until all three were wrecked near Tobermory in 1901', engine: 'Steeple compound', hp: 'about 400 hp', rpm: 'about 80 rpm',
                      boiler: 'Firebox boilers, coal', len: 160, beam: 30, draft: 11, crew: 'about 14, and three or four on each barge', about: true },
                    blurb: 'A wooden steamer built to carry lumber: a deck load stacked high, more in her hold, and old schooners cut down to barges on a line astern. She carries far more than a tug can tow, but she is slow, and she takes no tows, salvage or log booms.' },
-  excursion:     { kind: 'tow', pax: true, name: 'Excursion steamer', year: 1895, to: 1935, price: 14000, power: 4, kn: 12, raftKn: 0, op: 20, risk: 1.05,
-                   spec: { like: '/*EXCURSION_LIKE*/', engine: 'Fore-and-aft compound engine', hp: 'about 350 hp', rpm: 'about 110 rpm',
-                     boiler: 'Scotch boiler, coal', len: 130, beam: 26, draft: 8, crew: 'about 12', about: true },
-                   blurb: 'A white day steamer with saloons below and an open promenade above, for the summer trade among the islands: visitors out from the railway towns to the resorts and cottages, and their groceries, ice and mail. She carries no other cargo and takes no tows, and out of the summer she keeps a skeleton crew.' },
+  excursion:     { kind: 'tow', pax: true, paxLoads: 8, name: 'Excursion steamer', year: 1895, to: 1935, price: 14000, power: 3, kn: 12, raftKn: 0, op: 20, risk: 1.05,
+                   spec: { like: "the Waubic (Collingwood, 1909), Northern Navigation's day boat from Penetanguishene and Midland to Parry Sound, licensed in 1914 for 325 passengers", engine: 'Triple-expansion engine', cyl: '10, 16½ & 27 × 15 in.', hp: 'about 400 hp', rpm: 'about 150 rpm',
+                     boiler: 'Scotch boiler, coal', len: 134, beam: 25, draft: 8, aboutDraft: true, crew: 'about 15' },
+                   blurb: 'A white day steamer with saloons below and an open promenade above, for the summer trade among the islands: about 320 visitors out from the railway towns to the resorts and cottages, and their groceries, ice and mail. Her steel hull is sheathed in wood against the granite shoals. She carries no other cargo and takes no tows, and out of the summer she keeps a skeleton crew.' },
   woodwrecker:   { kind: 'tow', wreck: true, name: 'Wooden wrecking tug', year: 1874, to: 1905, price: 9500, power: 4, kn: 9.5, raftKn: 1.3, op: 15, risk: 1.15,
                    spec: { like: 'the Erie Belle (Cleveland, 1862), a wrecking tug whose boiler blew up off Kincardine in 1883 as she worked to free a stranded schooner', engine: 'High-pressure engine', hp: 'about 150 hp', rpm: 'about 100 rpm',
                      boiler: 'Firebox boiler, coal', len: 117, beam: 20, draft: 9.5, crew: '12', aboutDraft: true },
@@ -588,7 +588,18 @@ const PORTS = [
     desc: 'Logs from the Muskoka back country are boomed at the mouth of the Moon River.' },
   { id: 'parrysound', name: 'Parry Sound', at: [45.347, -80.035], label: 'e', major: true, mill: true,
     supply: { lumber: .3 }, demand: { logs: .7, supplies: .22, coal: .08 },
-    desc: 'A sawmill town at the mouth of the Seguin River.' },
+    desc: 'A sawmill town at the mouth of the Seguin River. The Belvidere Hotel on the hill above the harbour takes summer visitors from the early 1880s.' },
+  // the summer resorts among the islands (from research: see README); est. positions are near the named place
+  { id: 'honeyharbour', name: 'Honey Harbour', at: [44.8707, -79.8226], label: 'e', opens: [1897, 6, 1], resort: { size: 1, hotel: 'hotels at Honey Harbour', news: 'Nathan Nickerson and his sons open the Victoria House at Honey Harbour for the summer visitors. There is no road: everyone comes by boat.' },
+    desc: 'A summer place among the islands, reached only by boat until 1956. Nathan Nickerson and his sons open the Victoria House here in 1897 (later the Delawana Inn), and the Grisé brothers the Royal Hotel on Royal Island across the channel in 1903.' },
+  { id: 'minnicog', name: 'Minnicognashene', at: [44.93, -79.92], label: 'w', opens: [1903, 6, 1], resort: { size: .5, hotel: 'Minnicognashene Hotel', news: 'The Minnicognashene Hotel is taking summer visitors, an hour by steamer from Penetanguishene.' },
+    desc: "'Minnicog', an island hotel advertised to American visitors, about an hour by steamer from Penetanguishene. It was open by 1903; the year it opened isn't known." },
+  { id: 'gohome', name: 'Go Home Bay', at: [45.01, -79.95], label: 'e', opens: [1898, 6, 1], resort: { size: .5, hotel: 'Madawaska Club', news: 'Professors from the University of Toronto have founded the Madawaska Club at Go Home Bay, for their summer cottages.' },
+    desc: 'University of Toronto professors found the Madawaska Club here in 1898: some 1,600 acres of rock and islands for their summer cottages, with a golf course and, from 1901, a biological station.' },
+  { id: 'sanssouci', name: 'Sans Souci', at: [45.19, -80.13], label: 'w', opens: [1900, 6, 1], resort: { size: .6, hotel: 'Sans Souci Hotel' },
+    desc: "A hotel at the heart of a growing island cottage community, a stop on the steamers between Midland and Parry Sound. The year it opened isn't known; it is in the game from 1900. Its ruins are now a Georgian Bay Land Trust reserve." },
+  { id: 'pointeaubaril', name: 'Pointe au Baril', at: [45.5606, -80.5033], label: 'e', opens: [1900, 6, 1], resort: { size: .5, grow: [1906, .9], hotel: 'Bellevue Hotel', hotelLater: [1906, 'Ojibway Hotel'], news: "The Oldfield family's Bellevue Hotel opens at Pointe au Baril, across the channel from the lighthouse." },
+    desc: "The Oldfield family's Bellevue Hotel opens here in 1900, and the Ojibway Hotel on Ojibway Island in 1906. The CPR reaches Pointe au Baril Station in 1908, and many of the hotels' guests go on to build cottages." },
   { id: 'byng', name: 'Byng Inlet', at: [45.766, -80.553], label: 'e', mill: true,
     supply: { logs: .5, lumber: .25 }, demand: { logs: .3, supplies: .2 },
     desc: 'Sawmills at the mouth of the Magnetawan River.' },
@@ -1145,7 +1156,9 @@ function priceFactor(pid, c) {
 function deliveryValue(pid, c, from) {
   if (pid === from) return 0;
   const pf = priceFactor(pid, c); if (pf <= 0) return 0;
-  return CARGO[c].rate * Math.pow(distKm(from, pid) / 100, .85) * pf * rateMult(c, pid);
+  const df = Math.pow(distKm(from, pid) / 100, .85);
+  // a fare is never less than about half the long-run price, however short the trip
+  return CARGO[c].rate * (c === 'visitors' ? Math.max(.55, df) : df) * pf * rateMult(c, pid);
 }
 function payWord(pf) { return pf >= 1 ? ['Pays well', 'hi'] : pf >= .62 ? ['Fair', 'mid'] : ['Glutted', 'lo']; }
 
@@ -1743,7 +1756,7 @@ function tugSpeed(t) {
   const m = MODELS[t.model];
   let v = m.kn * KNOT * STEAM_HOURS;
   if (t.boom) v = m.raftKn * KNOT * 24;
-  else if (t.tow.length) v *= 1 - (m.hooker ? .22 : .4) * Math.min(1, towLoads(t) / m.power);
+  else if (t.tow.length && !m.pax) v *= 1 - (m.hooker ? .22 : .4) * Math.min(1, towLoads(t) / m.power);
   if (t.jobTow) v = Math.min(v, 5.5 * KNOT * STEAM_HOURS);
   const k = S.weather.today.k;
   if (m.sail) v *= { calm: .3, moderate: 1, fresh: 1.15, gale: .5, fog: .6 }[k];
@@ -1979,7 +1992,7 @@ function routeStop(t, pid) {
     const here = valueAt(t, pid, g.c, g.from); if (here <= 0) continue;
     let best = here;
     for (const s of later) { if (s === g.from) break; best = Math.max(best, valueAt(t, s, g.c, g.from)); }
-    if (here >= best * .85) { payCargo(t, pid, g, here); moved += g.n; g.n = 0; }
+    if (here >= best * .85) { payCargo(t, pid, g, here); moved += g.c === 'visitors' ? g.n * .1 : g.n; g.n = 0; }
   }
   t.tow = t.tow.filter(g => g.n > .01); if (!t.tow.length) t.boom = false;
   // load what pays best further along the route
@@ -1995,6 +2008,12 @@ function routeStop(t, pid) {
   let loads = towLoads(t);
   const hooker = !!MODELS[t.model].hooker;
   for (const o of opts) {
+    // a passenger boat has her own room for visitors (they walk aboard) and a little for package freight
+    if (isPax(t)) {
+      const m = MODELS[t.model], have = t.tow.filter(g => g.c === o.c).reduce((a, g) => a + g.n, 0), n = Math.min((o.c === 'visitors' ? m.paxLoads : m.power) - have, o.stock);
+      if (n >= 1) { addTow(t, o.c, n, pid); P.stock[o.c] -= n; moved += o.c === 'visitors' ? n * .1 : n; if (o.c === 'supplies') shipInland(pid, 'supplies', n, 'in'); }
+      continue;
+    }
     if (o.c === 'logs' && !hooker) {
       if (t.tow.length && !t.boom) continue;
       const n = Math.min(cap * 3 - loads, o.stock);
@@ -2057,7 +2076,7 @@ function contractCustomer(c, to, y) {
   if (c === 'logs') return to === 'waubaushene' && y < 1926 ? 'the Georgian Bay Lumber Co.' : to === 'baycity' ? 'the Saginaw River mills' : `the sawmills at ${name}`;
   if (c === 'coal') { const r = railOwnerAt(to, y); return r ? `the ${r}, for its engines at ${name}` : `the coal dealers at ${name}`; }
   if (c === 'lumber') return `the lumber dealers at ${name}`;
-  if (PORT[to].resort) return PORT[to].resort.hotel ? `the ${PORT[to].resort.hotel}` : `the cottagers at ${name}`;
+  if (PORT[to].resort) return `the ${resortHotel(to, y)}`;
   if (c === 'grain') return GRAIN_MILLS.has(to) ? `the flour mills at ${name}` : baseRate(PORT[to], 'supply', 'logs', S.day) ? `the lumber camps at ${name}, for their horses` : `the feed merchants at ${name}`;
   return baseRate(PORT[to], 'supply', 'logs', S.day) ? `the lumber camps at ${name}` : `the merchants at ${name}`;
 }
@@ -3600,7 +3619,10 @@ function shipByLake(pid, cargo, n) {
    First World War, booms in the 1920s, falls away in the Depression and the war, and fades after Highway 400 opens in
    1952, when they drive up instead. Only a passenger boat carries them; the resorts want supplies all summer. ---------- */
 const TOUR_FROM = dayOf(1895, 6, 1), PAX_LOAD = 40;
-const TOUR_GATES = { midland: .55, penetang: .4, parrysound: .4, collingwood: .2 };
+// The railway towns visitors come from: [how many, from the year the railway brings them] (Parry Sound: the Canadian Northern, 1906)
+const TOUR_GATES = { midland: [2, 1879], penetang: [1.4, 1879], parrysound: [1.2, 1906], collingwood: [.6, 1855] };
+const resortSize = (pid, day) => { const r = PORT[pid].resort; return r.grow && yearOf(day) >= r.grow[0] ? r.grow[1] : r.size; };
+const resortHotel = (pid, y) => { const r = PORT[pid].resort; return r.hotelLater && y >= r.hotelLater[0] ? r.hotelLater[1] : r.hotel; };
 const isPax = t => !!MODELS[t.model].pax;
 const canCarry = (t, c) => isPax(t) ? c === 'visitors' || c === 'supplies' : c !== 'visitors';
 // How busy the summer is on a given day: the high season is July and August
@@ -3624,15 +3646,17 @@ function visitorRate(pid, day, kind) {
   if (day < TOUR_FROM || !portOpen(pid, day)) return 0;
   const k = tourSeason(day) * tourEra(yearOf(day)); if (!k) return 0;
   const p = PORT[pid], late = dateOf(day).getUTCMonth() >= 7 && dateOf(day).getUTCDate() > 20 || dateOf(day).getUTCMonth() >= 8;
-  if (p.resort) return k * p.resort.size * (kind === 'demand' ? (late ? .35 : .7) : (late ? .7 : .3));
-  const g = TOUR_GATES[pid] || 0; if (!g || (p.railDay && day < p.railDay)) return 0;
-  return k * g * (kind === 'supply' ? (late ? .4 : 1) : (late ? .8 : .35));
+  if (p.resort) return k * resortSize(pid, day) * (kind === 'demand' ? (late ? .7 : 1.4) : (late ? 1.4 : .6));
+  const G = TOUR_GATES[pid]; if (!G) return 0;
+  // before its own railway, Parry Sound is somewhere visitors go (the Belvidere Hotel) rather than come from
+  if (yearOf(day) < G[1]) return kind === 'demand' ? k * .5 : 0;
+  return k * G[0] * (kind === 'supply' ? (late ? .4 : 1) : (late ? .8 : .35));
 }
 // The resorts want supplies (groceries, ice, coal oil and the mail) through the summer, and a little in the spring and fall
 function resortSupplies(pid, day) {
   if (!portOpen(pid, day)) return 0;
   const m = dateOf(day).getUTCMonth() + 1, k = m >= 6 && m <= 9 ? 1 : .15;
-  return PORT[pid].resort.size * .22 * k * Math.max(.4, tourEra(yearOf(day)));
+  return resortSize(pid, day) * .22 * k * Math.max(.4, tourEra(yearOf(day)));
 }
 /* ---------- harbour work: from 1876 a tug stationed at a port tows the sailing ships in and out and eases the steamers
    alongside, for a fee each time a lake ship comes in or goes out. Other companies' tugs lying at the same port share
@@ -5181,7 +5205,7 @@ function specHTML(m) {
   const ab = p.about ? 'about ' : '';
   return `<dl class="kv spec">
     ${p.rig ? `<dt>Rig</dt><dd>${esc(p.rig)}</dd><dt>Hull</dt><dd>${esc(p.hull)}</dd>` : `<dt>Engine</dt><dd>${esc(p.engine)}${p.cyl ? `; cylinders ${p.cyl}` : ''}</dd><dt>Power</dt><dd>${p.hp} at ${p.rpm}</dd><dt>Boiler and fuel</dt><dd>${esc(p.boiler)}</dd>`}
-    <dt>Speed</dt><dd>${m.kn} knots${m.sail ? ' in a fair breeze' : ' running light'}${m.raftKn ? `, ${m.raftKn} with a log raft` : ''}</dd>
+    <dt>Speed</dt><dd>${m.kn} knots${m.sail ? ' in a fair breeze' : m.pax ? '' : ' running light'}${m.raftKn ? `, ${m.raftKn} with a log raft` : ''}</dd>
     <dt>Length</dt><dd>${ab}${ftIn(p.len)}</dd><dt>Beam</dt><dd>${ab}${ftIn(p.beam)}</dd>
     <dt>Draft</dt><dd>${ab || (p.aboutDraft ? 'about ' : '')}${ftIn(p.draft)}${p.draftNote ? ' ' + p.draftNote : ''}</dd><dt>Crew</dt><dd>${p.crew}</dd></dl>
   <p class="fine">Modelled on ${esc(p.like)}.</p>`;
@@ -6489,7 +6513,7 @@ const EVENT_BOAT = { tourists: 'excursion', hooker: 'hooker', woodwrecker: 'wood
 function newspaperHTML(e) {
   const model = EVENT_BOAT[e.id], m = model && MODELS[model], refit = e.id === 'refit', hw = e.id === 'harbourwork', gb = e.id === 'grainbarges';
   const tugs = refit ? S.tugs.filter(t => canRefit(t) && !t.refit) : hw ? S.tugs.filter(canHarbour) : [];
-  const boatBit = m ? `${planThumb('boat', model, 'the ' + m.name)}<p class="paper-ad"><b>${esc(m.name)}</b> · ${money(m.price)} at the yards · ${m.warp ? `brings a boom of about ${WARP_LOGS} loads of logs down a river each week` : m.kind === 'fish' ? `holds ${m.hold} tons, works ${esc(m.net)} yards of net` : m.hooker ? `carries ${m.power} loads, ${m.power + (m.deckLoad || 0)} of lumber` : `tows ${m.power} barges or a ${m.power * 3}-load boom`} · ${m.kn} knots</p>`
+  const boatBit = m ? `${planThumb('boat', model, 'the ' + m.name)}<p class="paper-ad"><b>${esc(m.name)}</b> · ${money(m.price)} at the yards · ${m.warp ? `brings a boom of about ${WARP_LOGS} loads of logs down a river each week` : m.kind === 'fish' ? `holds ${m.hold} tons, works ${esc(m.net)} yards of net` : m.pax ? `carries about ${m.paxLoads * PAX_LOAD} visitors and their supplies` : m.hooker ? `carries ${m.power} loads, ${m.power + (m.deckLoad || 0)} of lumber` : `tows ${m.power} barges or a ${m.power * 3}-load boom`} · ${m.kn} knots</p>`
     : refit ? `${planThumb('boat', 'woodrefit', 'a tug with her new compound engine')}<p class="paper-ad"><b>The compound refit</b> · ${money(REFIT_COST)} · about two weeks in the yard, or done over the winter</p>`
     : hw ? `${planThumb('boat', 'woodsimple', 'a harbour tug')}<p class="paper-ad"><b>Harbour work</b> · a fee for every lake ship your tug brings in or sees out · busy ports pay best</p>` : '';
   const go = m ? `<button class="btn wide" data-act="newsYard">See her at the shipyard</button>`
@@ -6585,7 +6609,7 @@ function shipyardHTML(yard) {
   <div class="models">${models.map(([k, m]) => `<div class="model">${planThumb('boat', k, 'the ' + m.name)}<div><h4>${m.name}</h4><p>${m.blurb}</p></div>
     <button class="btn primary" data-act="buy" data-model="${k}" ${S.cash >= m.price && (!m.warp || warpRivers().length) ? '' : 'disabled'}>${money(m.price)}</button>
     ${m.warp ? `<label class="riverpick"><span class="fine">Ship her by rail to</span><select id="warpRiver">${warpRivers().map(id => `<option value="${id}">${esc(ucf(riverWhere(id)))}</option>`).join('')}</select></label>` : ''}
-    <div class="specs">${m.warp ? `<span>Brings down a boom of about <b>${WARP_LOGS}</b> loads of logs a week</span><span>Paid about <b>${money(WARP_FEE)}</b> a boom</span>` : m.pax ? `<span>Carries about <b>${m.power * PAX_LOAD}</b> visitors, or <b>${m.power}</b> loads of supplies</span><span>Summers only: no other cargo, tows or salvage</span>` : m.hooker ? `<span>Carries <b>${m.power}</b> loads with her barges, <b>${m.power + (m.deckLoad || 0)}</b> of lumber</span><span>No log booms, tows or salvage</span>` : m.kind === 'tow' ? `<span>Tows <b>${m.power}</b> barges or a <b>${m.power * 3}</b>-load boom</span>${m.wreck ? '<span>Any salvage, and a quarter more for it</span>' : ''}` : `<span>Holds <b>${m.hold}</b> tons</span><span>Works <b>${m.net}</b> yards of net</span>`}<span>Speed <b>${m.kn}</b> knots${m.sail ? ' in a breeze' : ' light'}${m.raftKn ? `, <b>${m.raftKn}</b> with a raft` : ''}</span><span>Costs <b>${money(m.op)}</b> a day</span><span>${m.warp ? 'Works upriver, out of the gales' : m.risk <= .7 ? 'Very seaworthy' : m.risk <= 1 ? 'Seaworthy' : 'Tender in a sea'}</span></div>
+    <div class="specs">${m.warp ? `<span>Brings down a boom of about <b>${WARP_LOGS}</b> loads of logs a week</span><span>Paid about <b>${money(WARP_FEE)}</b> a boom</span>` : m.pax ? `<span>Carries about <b>${m.paxLoads * PAX_LOAD}</b> visitors and <b>${m.power}</b> loads of supplies</span><span>Summers only: no other cargo, tows or salvage</span>` : m.hooker ? `<span>Carries <b>${m.power}</b> loads with her barges, <b>${m.power + (m.deckLoad || 0)}</b> of lumber</span><span>No log booms, tows or salvage</span>` : m.kind === 'tow' ? `<span>Tows <b>${m.power}</b> barges or a <b>${m.power * 3}</b>-load boom</span>${m.wreck ? '<span>Any salvage, and a quarter more for it</span>' : ''}` : `<span>Holds <b>${m.hold}</b> tons</span><span>Works <b>${m.net}</b> yards of net</span>`}<span>Speed <b>${m.kn}</b> knots${m.sail ? ' in a breeze' : ' light'}${m.raftKn ? `, <b>${m.raftKn}</b> with a raft` : ''}</span><span>Costs <b>${money(m.op)}</b> a day</span><span>${m.warp ? 'Works upriver, out of the gales' : m.risk <= .7 ? 'Very seaworthy' : m.risk <= 1 ? 'Seaworthy' : 'Tender in a sea'}</span></div>
     <p class="specline">${m.sail ? `${esc(m.spec.rig.split('.')[0])}` : `${esc(m.spec.engine.split(':')[0])}, ${m.spec.hp} at ${m.spec.rpm}`} · ${ftIn(m.spec.len)} long, draws ${ftIn(m.spec.draft)}</p>
     <details class="specsheet"><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details></div>`).join('')}</div>
   ${soon.length ? `<p class="fine">Coming: ${soon.map(([, m]) => `${m.name} (${m.year})`).join(', ')}.</p>` : ''}
@@ -6819,17 +6843,23 @@ const HISTORY = [
   [1889, 5, 'trade', 'The alligator', 'West & Peachey of Simcoe, Ontario, began building steam warping tugs that winched log booms across lakes and hauled themselves over the portages. Some 200 were built.'],
   [1893, 4, 'trade', 'A warning about the fish', 'A Dominion commission found the bay being fished out, whitefish and trout alike, much of the catch shipped to American buyers. It called for closed seasons and limits on nets.'],
   [1893, 5, 'nature', 'Algonquin Park', 'Ontario set aside Algonquin Park, the high country where the Muskoka and Magnetawan rivers begin their run to the bay.'],
+  [1897, 6, 'trade', 'A hotel at Honey Harbour', 'Nathan Nickerson and his sons opened the Victoria House at Honey Harbour, which could be reached only by boat until a road came in 1956. As the Delawana it still takes guests.'],
   [1897, 7, 'trade', 'The Dingley Tariff', 'The United States raised its duty on Canadian lumber.'],
   [1897, 9, 'land', 'Depot Harbour opens', "J. R. Booth's Ottawa, Arnprior and Parry Sound Railway reached its new port on Parry Island, to carry prairie grain from the lake boats east by rail."],
   [1898, 5, 'trade', 'Logs must be sawn in Ontario', 'Ontario ruled that pine cut on Crown land had to be sawn in Ontario. The log rafts to Michigan stopped, and new sawmills went up around the bay.'],
+  [1898, 0, 'trade', 'The professors at Go Home Bay', 'University of Toronto professors founded the Madawaska Club at Go Home Bay: some 1,600 acres of rock and islands for their summer cottages, and from 1901 a biological station.'],
+  [1906, 6, 'trade', 'The Ojibway Hotel', 'The Ojibway Hotel opened on an island at Pointe au Baril. The CPR reached Pointe au Baril Station two years later, and many of the hotel\'s guests built cottages nearby.'],
   [1908, 6, 'ships', 'A canal that was never built', 'Engineers reported on a Georgian Bay Ship Canal from the French River through Lake Nipissing to the Ottawa River. It was never built; Canada rebuilt the Welland Canal instead.'],
+  [1909, 9, 'ships', 'The Waubic', "Collingwood launched the Waubic, a steel day steamer sheathed in wood against the granite shoals, for Northern Navigation's run from Penetanguishene and Midland to Parry Sound. She was licensed for 325 passengers."],
   [1911, 9, 'world', 'Free trade voted down', "Sir Wilfrid Laurier's government lost an election fought over free trade with the United States."],
   [1912, 5, 'ships', 'The CPR moves to Port McNicoll', 'The Canadian Pacific moved its lake steamers from Owen Sound to its new port at Port McNicoll, with a huge grain elevator.'],
   [1913, 11, 'ships', 'The Great Storm', 'The worst storm in the history of the Great Lakes wrecked 19 ships and killed more than 250 sailors in four days, most of them on Lake Huron.'],
   [1914, 8, 'world', 'War', 'Canada went to war. Men left the boats and the mills for the army, and wartime prices drove freight rates up.'],
   [1916, 9, 'people', 'Ontario goes dry', 'The Ontario Temperance Act closed the bars and liquor stores across the province.'],
   [1918, 11, 'world', 'The Armistice', 'The First World War ended. More than 60,000 Canadians had died.'],
+  [1920, 0, 'land', 'The Trent–Severn reaches the bay', 'The Trent–Severn Waterway opened its link to Georgian Bay at Port Severn, joining the bay to Lake Ontario through the Kawarthas.'],
   [1921, 11, 'nature', 'A strange fish in Lake Erie', 'A fisherman caught a sea lamprey in Lake Erie, the first ever seen above Niagara Falls. It had come up through the Welland Canal.'],
+  [1921, 5, 'ships', 'The Georgian Bay Tourist Company', 'Northern Navigation gave up its day route from Midland to Parry Sound after the 1920 season. Midland businessmen took it over as the Georgian Bay Tourist Company, with the old steamer America renamed the Midland City, calling at Honey Harbour, Minnicog, Go Home Bay, Sans Souci and Rose Point.'],
   [1923, 10, 'people', 'The Williams Treaties', 'Canada and Ontario signed treaties with seven Anishinaabe First Nations covering land around the southeast corner of the bay and Lake Simcoe.'],
   [1927, 6, 'people', 'Ontario ends prohibition', 'Ontario opened government liquor stores under the new Liquor Control Board.'],
   [1929, 5, 'nature', 'Georgian Bay Islands National Park', 'Canada made a national park of islands at the southeast end of the bay, among them Beausoleil Island.'],
@@ -6844,6 +6874,7 @@ const HISTORY = [
   [1950, 6, 'nature', 'The lake trout are gone', "Lampreys and heavy fishing had all but wiped out Lake Huron's lake trout, and the fish tugs that lived on them."],
   [1952, 7, 'land', 'Highway 400 opens', "Ontario's first controlled-access highway opened from Toronto to Barrie, bringing the bay within a few hours' drive of the city."],
   [1955, 10, 'nature', 'The Great Lakes Fishery Commission', 'Canada and the United States set up a joint commission to fight the sea lamprey and restore the fisheries.'],
+  [1955, 0, 'ships', 'The last island steamer', 'The Midland City, the last of the big excursion steamers among the 30,000 Islands, was retired and burned at the mouth of the Wye River in Midland Bay. Her hull is a breakwater there now.'],
   [1959, 4, 'ships', 'The St. Lawrence Seaway opens', 'Ocean ships could sail from the Atlantic into the heart of the continent, and the lakes trade changed for good.'],
   [1965, 11, 'ships', "The CPR's last passenger sailings", 'The Assiniboia and the Keewatin made their last passenger trips from Port McNicoll to the Lakehead.'],
   [1968, 9, 'trade', 'Nuclear power on Lake Huron', "Douglas Point, Canada's first full-size nuclear station, went into service on the Lake Huron shore. The Bruce station beside it followed from 1977."],
@@ -6858,7 +6889,7 @@ const HISTORY = [
   [2018, 11, 'people', 'The Williams Treaties settlement', 'Canada and Ontario settled with the seven Williams Treaties First Nations, recognising their rights to hunt and fish on their treaty lands.'],
   [2020, 7, 'nature', 'High water again', 'Seven years after their record low, Lakes Michigan and Huron set monthly high-water records through 2019 and 2020.'],
   [2023, 6, 'people', '$10 billion for a broken promise', "Canada and Ontario agreed to pay $10 billion to the 21 First Nations of the Robinson-Huron Treaty for the payments frozen at $4 since 1874."],
-].map(([y, m, k, head, body]) => ({ y, m, k, head, body, at: y + (m - .5) / 12 }))
+].map(([y, m, k, head, body]) => ({ y, m, k, head, body, at: y + ((m || 6.5) - .5) / 12 }))
   .concat(WRECKS.map(w => ({ y: w.date[0], m: w.date[1], k: 'ships', head: w.tl || `The ${w.name} is lost`, body: w.tlBody || w.text, at: w.date[0] + (w.date[1] - .5) / 12, wreck: w.id })))
   .sort((a, b) => a.at - b.at);
 const TL0 = 1870, TL_PX = 18, TL_PAD = 60;
@@ -6891,7 +6922,7 @@ function tlPick(i, scroll) {
   tlSel = clamp(i, 0, HISTORY.length - 1);
   const e = HISTORY[tlSel], [kind, c] = TL_KINDS[e.k], card = $('#tlCard'); if (!card) return;
   card.style.setProperty('--c', `var(${c})`);
-  card.innerHTML = `<span class="when"><i></i>${MONTHS[e.m - 1]} ${e.y} · ${esc(kind)}</span><h4>${esc(e.head)}</h4><p class="desc">${esc(e.body)}</p>${S && e.at > tlGame() && e.y <= 1959 ? '<span class="soon">Still to come in your game.</span>' : e.wreck && S ? `<div class="row"><button class="btn" data-act="wreckChart" data-id="${e.wreck}">Show her wreck on the chart</button></div>` : ''}`;
+  card.innerHTML = `<span class="when"><i></i>${e.m ? MONTHS[e.m - 1] + ' ' : ''}${e.y} · ${esc(kind)}</span><h4>${esc(e.head)}</h4><p class="desc">${esc(e.body)}</p>${S && e.at > tlGame() && e.y <= 1959 ? '<span class="soon">Still to come in your game.</span>' : e.wreck && S ? `<div class="row"><button class="btn" data-act="wreckChart" data-id="${e.wreck}">Show her wreck on the chart</button></div>` : ''}`;
   for (const d of document.querySelectorAll('#modalBody .tl-dot')) d.classList.toggle('on', +d.dataset.i === tlSel);
   const sc = $('#tlScroll'), x = tlX(e.at);
   if (sc && scroll !== false && (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 40)) sc.scrollTo({ left: x - sc.clientWidth / 2, behavior: scroll === 'jump' ? 'auto' : 'smooth' });
