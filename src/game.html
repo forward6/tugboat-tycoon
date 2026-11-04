@@ -2476,6 +2476,7 @@ function simAdvance(days) {
   }
 }
 function dailyTick() {
+  landTick();
   const day = Math.floor(S.day);
   if (inPlay && S.season && monthOf(day) !== lastSaveMonth) { lastSaveMonth = monthOf(day); saveGame(true); }
   advanceWeather();
@@ -2760,6 +2761,7 @@ function cloudSave(force, leaving) {
 }
 // From here on the game in play is saved; the browser is asked to keep this site's storage
 function beginPlay() {
+  landTick(true);
   inPlay = true; lastSaveMonth = S && S.season ? monthOf(S.day) : null; saveGame(true);
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* not offered here */ }
 }
@@ -2913,46 +2915,97 @@ function buildIslets() {
 // and rock sit in the same places whether you see the whole map or zoom right in.
 const TILE_KM = 12, WOODS_KM = 17, tileCache = new Map();
 const tileKm = kind => kind === 'woods' ? WOODS_KM : TILE_KM;
+/* ---------- the land through the year: green-up in the spring, harvest gold, the hardwoods turning, bare November
+   woods and the first snow. Colours are set at stages through the year and blended between; the north turns first. In
+   the dark theme the same colours are taken down to night. The open country is painted soft, like grassland: drifts of
+   pasture and hay, the grain of the grass, groves and single trees. ---------- */
+const LAND = { key: '' };
+const LAND_PAL = {
+  snow:    { ground: '#eef1ef', crop: ['#f3f5f3', '#e7ebea', '#eef0ee', '#e2e7e6', '#f0f2f0'], hedge: '#a39d91', deci: ['#a69d8f', '#9b9284', '#ada597', '#a1998b', '#958c7e'], con: '#4f7339', forest: '#e1e6e1', shield: '#e5e8e5', rock: '#cfd2d0', lake: '#dfe9ef' },
+  thaw:    { ground: '#9fae7b', crop: ['#a7b485', '#a29e7f', '#adb88a', '#98a576', '#a4b282'], hedge: '#948c7b', deci: ['#9d9483', '#958b7a', '#a59c8b', '#8f8574', '#9a907f'], con: '#557a3e', forest: '#a2aa88', shield: '#a5ab92', rock: '#c4beb0', lake: null },
+  spring:  { ground: '#a7c074', crop: ['#b6cc84', '#a99d76', '#bfd38e', '#9db86c', '#adc57c'], hedge: '#86a35a', deci: ['#9cbf6a', '#a8c777', '#93b862', '#b0cb80', '#a3c272'], con: '#557a3e', forest: '#98b670', shield: '#a2b08b', rock: '#c4beb0', lake: null },
+  summer:  { ground: '#9db96c', crop: ['#a9c278', '#90ae60', '#b5ca82', '#86a657', '#a2bd70'], hedge: '#6f9148', deci: ['#6a8f45', '#76994d', '#62873f', '#80a153', '#70944a'], con: '#557a3e', forest: '#83a65c', shield: '#97a883', rock: '#c4beb0', lake: null },
+  harvest: { ground: '#9fb86a', crop: ['#a9c076', '#c4bf78', '#b4c27c', '#93ad5f', '#a8bb72'], hedge: '#71904a', deci: ['#6f9145', '#7a984d', '#68893f', '#869f52', '#77944a'], con: '#557a3e', forest: '#86a45c', shield: '#9aa883', rock: '#c4beb0', lake: null },
+  autumn:  { ground: '#9db46b', crop: ['#a6ba73', '#bdb877', '#adbd78', '#94aa63', '#b2b673'], hedge: '#b0773f', deci: ['#d98b3a', '#c4553a', '#e3b94a', '#b0703e', '#a3a565'], con: '#4f7339', forest: '#b0a66a', shield: '#a8a87f', rock: '#c4beb0', lake: null },
+  bare:    { ground: '#9eaa7d', crop: ['#a5ae84', '#9c9d7a', '#abb38a', '#959b73', '#a3ac82'], hedge: '#8f8676', deci: ['#9d9282', '#948978', '#a59a89', '#8f8473', '#998e7d'], con: '#4f7339', forest: '#a5a78e', shield: '#a4a993', rock: '#c2bcb0', lake: null },
+};
+// [day of the year, stage]; between two stages the colours blend
+const LAND_YEAR = [[0, 'snow'], [100, 'snow'], [112, 'thaw'], [140, 'spring'], [170, 'summer'], [225, 'summer'], [248, 'harvest'], [268, 'harvest'], [288, 'autumn'], [296, 'autumn'], [316, 'bare'], [332, 'bare'], [343, 'snow'], [366, 'snow']];
+// the north greens later in the spring, and turns and snows sooner in the fall
+const LAND_AHEAD = { shield: 9, forest: 6, fields: 0 };
+const hexRGB = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mixHex = (a, b, t) => { if (!a || !b) return t < .5 ? a : b; const A = hexRGB(a), B = hexRGB(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+function landStage(kind) {
+  if (!S) return null;
+  const d = dateOf(S.day); let doy = (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / DAYMS, doy0 = doy;
+  doy += (doy0 > 182 ? 1 : -1) * (LAND_AHEAD[kind] || 0);
+  const y = clamp(doy, 0, 365.9); let i = 0; while (i < LAND_YEAR.length - 2 && LAND_YEAR[i + 1][0] <= y) i++;
+  const [d0, a] = LAND_YEAR[i], [d1, b] = LAND_YEAR[i + 1], t = a === b ? 0 : Math.round(clamp((y - d0) / (d1 - d0), 0, 1) * 3) / 3;
+  return { a, b, t, key: a + b + t.toFixed(2) };
+}
+// the night version of a colour, for the dark theme: much darker and a little greyer, with pale things (snow) staying pale
+function nightHex(h) {
+  let [r, g, b] = hexRGB(h).map(v => v / 255); const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  let hu = 0, sa = d ? d / (1 - Math.abs(2 * l - 1)) : 0;
+  if (d) hu = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  const L = .1 + l * l * .4, Sa = sa * .8, c = (1 - Math.abs(2 * L - 1)) * Sa, x = c * (1 - Math.abs((hu % 2 + 2) % 2 - 1)), m = L - c / 2;
+  const [R, G, B] = hu < 1 ? [c, x, 0] : hu < 2 ? [x, c, 0] : hu < 3 ? [0, c, x] : hu < 4 ? [0, x, c] : hu < 5 ? [x, 0, c] : [c, 0, x];
+  return '#' + [R, G, B].map(v => Math.round(clamp((v + m) * 255, 0, 255)).toString(16).padStart(2, '0')).join('');
+}
+function landPal(kind) {
+  const st = landStage(kind) || { a: 'summer', b: 'summer', t: 0, key: 'summer' }, dark = isDarkTheme();
+  const A = LAND_PAL[st.a], B = LAND_PAL[st.b], out = { key: (dark ? 'd' : 'l') + st.key }, f = c => c && dark ? nightHex(c) : c;
+  for (const k in A) out[k] = Array.isArray(A[k]) ? A[k].map((c, i) => f(mixHex(c, B[k][i], st.t))) : f(mixHex(A[k], B[k], st.t));
+  if (!out.lake) out.lake = COL.water;
+  return out;
+}
+const landKey = () => (isDarkTheme() ? 'd' : 'l') + ['fields', 'forest', 'shield'].map(k => (landStage(k) || { key: 't' }).key).join('|');
+// Repaint the country when the season moves on: at most every ten days of play, or at once when a game is loaded
+function landTick(force) {
+  const k = landKey(); if (k === LAND.key) return;
+  if (!force && S && LAND.day != null && Math.abs(S.day - LAND.day) < 10) return;
+  LAND.key = k; LAND.day = S ? S.day : null; LAND.dirty = true;
+}
+// the repaint itself waits for the next frame drawn, so a fast-forward through a season repaints once
+function landPaint() { if (!LAND.dirty) return; LAND.dirty = false; tileCache.clear(); if (!GFX.on) renderBase(); HI.sig = ''; STILL.key = ''; }
 function tile(kind, s) {
-  const q = Math.max(1, Math.round(s * 2) / 2), key = kind + q, TK = tileKm(kind);
+  const q = Math.max(1, Math.round(s * 2) / 2), P = landPal(kind), key = kind + q + P.key, TK = tileKm(kind);
   let c = tileCache.get(key); if (c) return c;
   const N = Math.min(1600, Math.max(8, Math.round(TK * q))), k = N / TK;
   c = document.createElement('canvas'); c.width = c.height = N;
-  const g = c.getContext('2d'), r = mulberry({ fields: 1855, forest: 1873, shield: 1912, woods: 1867 }[kind]);
+  const g = c.getContext('2d'), r = mulberry({ fields: 1855, forest: 1873, shield: 1912, woods: 1867 }[kind]), rc = mulberry(7 + kind.length);
+  const deci = () => P.deci[Math.floor(rc() * 5)];
   const blob = (x, y, rad, col) => { g.fillStyle = col; for (const dx of [-TK, 0, TK]) for (const dy of [-TK, 0, TK]) {
     const px = (x + dx) * k, py = (y + dy) * k; if (px < -rad * k || py < -rad * k || px > N + rad * k || py > N + rad * k) continue;
     g.beginPath(); g.arc(px, py, Math.max(.6, rad * k), 0, Math.PI * 2); g.fill(); } };
-  if (kind === 'woods') {
-    for (let i = 0; i < 30; i++) { const cx = r() * TK, cy = r() * TK, rad = .2 + r() * .6, n = rad * rad * 55; for (let j = 0; j < n; j++) { const a = r() * 6.283, d = Math.sqrt(r()) * rad; blob(cx + Math.cos(a) * d, cy + Math.sin(a) * d * (.6 + r() * .4), .05 + r() * .07, r() < .5 ? COL.tree : COL.treeDark); } }
-  } else if (kind === 'fields') {
-    // farm lots laid out in concession strips, with woodlots and fence lines
-    g.fillStyle = COL.land; g.fillRect(0, 0, N, N);
-    const rows = []; let tot = 0; while (tot < TILE_KM) { const h = .6 + r() * 1.1; rows.push(h); tot += h; }
-    let y = 0;
-    for (const h0 of rows) {
-      const h = h0 * TILE_KM / tot;
-      for (let x = 0; x < TILE_KM - .01;) {
-        const w = Math.min(TILE_KM - x, .3 + r() * 1.2), t = r();
-        if (t < .62) { g.globalAlpha = .35 + r() * .45; g.fillStyle = t < .3 ? COL.fieldA : COL.fieldB; g.fillRect(x * k, y * k, w * k, h * k); g.globalAlpha = 1; }
-        x += w;
-      }
-      y += h;
-    }
-    // woodlots left standing at the back of the farms
-    for (let i = 0; i < 12; i++) { const cx = r() * TILE_KM, cy = r() * TILE_KM, rad = .25 + r() * .5; for (let j = 0; j < rad * rad * 60; j++) { const a = r() * 6.283, d = Math.sqrt(r()) * rad; blob(cx + Math.cos(a) * d, cy + Math.sin(a) * d, .06 + r() * .06, r() < .5 ? COL.tree : COL.treeDark); } }
-    // trees along the fence lines
-    for (let i = 0; i < 260; i++) blob(r() * TILE_KM, r() * TILE_KM, .035 + r() * .03, COL.tree);
+  const rect = (x, y, w, h, col, a = 1) => { g.globalAlpha = a; g.fillStyle = col; g.fillRect(x * k, y * k, Math.max(.6, w * k), Math.max(.6, h * k)); g.globalAlpha = 1; };
+  if (kind === 'fields') {
+    // open country painted soft: broad drifts of pasture and hay, groves and single trees, no lines
+    rect(0, 0, TK, TK, P.ground);
+    for (let i = 0; i < 90; i++) { const cx = r() * TK, cy = r() * TK, rad = .5 + r() * 1.6, col = P.crop[Math.floor(r() * 5)];
+      for (const dx of [-TK, 0, TK]) for (const dy of [-TK, 0, TK]) { const px = (cx + dx) * k, py = (cy + dy) * k; if (px < -rad * k || py < -rad * k || px > N + rad * k || py > N + rad * k) continue;
+        const gr = g.createRadialGradient(px, py, 0, px, py, rad * k); gr.addColorStop(0, rgba(col, .55)); gr.addColorStop(1, rgba(col, 0)); g.fillStyle = gr; g.fillRect(px - rad * k, py - rad * k, rad * 2 * k, rad * 2 * k); } }
+    // the grain of the grass: fine flecks, lighter and darker
+    for (let i = 0, n = Math.min(TK * TK * 260, N * N * .5); i < n; i++) { const col = r() < .5 ? P.crop[2] : P.crop[3]; g.globalAlpha = .18 + r() * .22; g.fillStyle = col; g.fillRect(r() * N, r() * N, Math.max(.7, .025 * k), Math.max(.7, .025 * k)); }
+    g.globalAlpha = 1;
+    // groves: a few soft clumps run together, ragged at the edges, with single trees standing out of them
+    for (let i = 0; i < 16; i++) { const cx = r() * TK, cy = r() * TK, sz = .25 + r() * .5, ang = r() * 3.14;
+      for (let j = 0; j < 7; j++) { const u = (r() - .5) * sz * 2.2, v = (r() - .5) * sz * .8, x = cx + u * Math.cos(ang) - v * Math.sin(ang), y = cy + u * Math.sin(ang) + v * Math.cos(ang), rad = sz * (.3 + r() * .4), col = r() < .35 ? P.con : deci();
+        for (const dx of [-TK, 0, TK]) for (const dy of [-TK, 0, TK]) { const px = (x + dx) * k, py = (y + dy) * k; if (px < -rad * k || py < -rad * k || px > N + rad * k || py > N + rad * k) continue;
+          const gr = g.createRadialGradient(px, py, 0, px, py, rad * k); gr.addColorStop(0, rgba(col, .7)); gr.addColorStop(.55, rgba(col, .45)); gr.addColorStop(1, rgba(col, 0)); g.fillStyle = gr; g.fillRect(px - rad * k, py - rad * k, rad * 2 * k, rad * 2 * k); }
+        for (let q = 0; q < 6; q++) blob(x + (r() - .5) * rad * 2, y + (r() - .5) * rad * 2, .035 + r() * .03, r() < .35 ? P.con : deci()); } }
+    for (let i = 0; i < 40; i++) blob(r() * TK, r() * TK, .035 + r() * .025, deci());
   } else if (kind === 'forest') {
-    g.fillStyle = COL.forest; g.fillRect(0, 0, N, N);
-    for (let i = 0; i < 40; i++) { g.fillStyle = COL.fieldA; g.fillRect(r() * N, r() * N, (.3 + r() * .5) * k, (.2 + r() * .4) * k); }
-    for (let i = 0; i < TILE_KM * TILE_KM * 6; i++) blob(r() * TILE_KM, r() * TILE_KM, .09 + r() * .08, r() < .5 ? COL.tree : COL.treeDark);
+    g.fillStyle = P.forest; g.fillRect(0, 0, N, N);
+    for (let i = 0; i < 40; i++) { g.fillStyle = P.crop[0]; g.fillRect(r() * N, r() * N, (.3 + r() * .5) * k, (.2 + r() * .4) * k); }
+    for (let i = 0; i < TILE_KM * TILE_KM * 6; i++) blob(r() * TILE_KM, r() * TILE_KM, .09 + r() * .08, r() < .5 ? deci() : P.con);
   } else {
-    g.fillStyle = COL.shield; g.fillRect(0, 0, N, N);
-    for (let i = 0; i < TILE_KM * TILE_KM * .9; i++) blob(r() * TILE_KM, r() * TILE_KM, .1 + r() * .25, COL.rock);
-    for (let i = 0; i < TILE_KM * TILE_KM * 8; i++) blob(r() * TILE_KM, r() * TILE_KM, .08 + r() * .08, r() < .7 ? COL.treeDark : COL.tree);
+    g.fillStyle = P.shield; g.fillRect(0, 0, N, N);
+    for (let i = 0; i < TILE_KM * TILE_KM * .9; i++) blob(r() * TILE_KM, r() * TILE_KM, .1 + r() * .25, P.rock);
+    for (let i = 0; i < TILE_KM * TILE_KM * 8; i++) blob(r() * TILE_KM, r() * TILE_KM, .08 + r() * .08, r() < .7 ? P.con : deci());
     for (let i = 0; i < TILE_KM * TILE_KM * .16; i++) {
       const cx = r() * TILE_KM, cy = r() * TILE_KM, len = .25 + r() * .7, wid = len * (.25 + r() * .3), rot = -.6 + (r() - .5) * .8;
-      g.fillStyle = COL.water;
+      g.fillStyle = P.lake;
       for (const dx of [-TILE_KM, 0, TILE_KM]) for (const dy of [-TILE_KM, 0, TILE_KM]) {
         const px = (cx + dx) * k, py = (cy + dy) * k; if (px < -len * k || py < -len * k || px > N + len * k || py > N + len * k) continue;
         g.beginPath();
@@ -2978,7 +3031,6 @@ function paintMap(g, x0, y0, s, W, H, px) {
   g.setTransform(s, 0, 0, s, -x0 * s, -y0 * s);
   const box = { x0, y0, x1: x0 + W / s, y1: y0 + H / s };
   g.fillStyle = texture(g, 'fields', s); g.fillRect(box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0);
-  g.fillStyle = texture(g, 'woods', s); g.fillRect(box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0);
   for (const z of ZONE_PATHS) { g.fillStyle = texture(g, z.kind, s); g.fill(z.p); }
   paintLand(g, s, px);
   paintRelief(g, s);
@@ -2994,13 +3046,13 @@ function paintMap(g, x0, y0, s, W, H, px) {
     if (DEPTH.ready) { g.save(); g.imageSmoothingEnabled = true; g.drawImage(DEPTH.tint, 0, 0, DEPTH.w / 2, DEPTH.h / 2); g.restore(); }
   }
   // islets
-  const lw = px / s;
+  const lw = px / s, IP = landPal('shield');
   g.lineWidth = lw; g.strokeStyle = COL.coast;
   for (const it of ISLETS) {
     if (it.x < box.x0 - 1 || it.x > box.x1 + 1 || it.y < box.y0 - 1 || it.y > box.y1 + 1) continue;
     g.beginPath(); it.pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath();
-    g.fillStyle = COL.rock; g.fill(); if (s > 9) g.stroke();
-    if (it.pine && s > 14) { g.fillStyle = COL.treeDark; g.beginPath(); g.arc(it.x, it.y, it.r * .45, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = IP.rock; g.fill(); if (s > 9) g.stroke();
+    if (it.pine && s > 14) { g.fillStyle = IP.con; g.beginPath(); g.arc(it.x, it.y, it.r * .45, 0, Math.PI * 2); g.fill(); }
   }
   // coastline and rivers
   g.lineJoin = 'round'; g.lineCap = 'round';
@@ -7006,7 +7058,7 @@ function migrate() {
   if (!S.mkt.own) { S.mkt.own = {}; for (const id in OWNERS) { const o = own(id), h = S.mkt.hold[id]; if (h) { S.mkt.hold[id] = Math.round(h * o.total / 1000); o.float = Math.max(0, Math.min(o.float, o.total - S.mkt.hold[id])); } } }
   if (!S.contracts) { S.contracts = []; S.rep = 0; }
 }
-function afterLoad() { migrate(); TENDER = null; ui.sel = null; ui.mode = null; ui.panelDirty = true; ui.tickerDirty = true; for (const t of S.tugs) t.vhd = t.hd; }
+function afterLoad() { migrate(); landTick(true); TENDER = null; ui.sel = null; ui.mode = null; ui.panelDirty = true; ui.tickerDirty = true; for (const t of S.tugs) t.vhd = t.hd; }
 
 /* =====================================================================
    Sound: all made in the browser, nothing to download.
@@ -7300,6 +7352,7 @@ const DAY_SEC = [0, 8, 2.4, .8];
 let lastT = performance.now(), lastPanelT = 0;
 let camSig = '', camStill = 0, lastTrafficDay = -1;
 function frame(now) {
+  landPaint();
   const dt = Math.min(.25, (now - lastT) / 1000); lastT = now;
   stepCamera(now, dt * 1000);
   const sig = cam.x.toFixed(3) + ',' + cam.y.toFixed(3) + ',' + cam.z.toFixed(4) + ',' + vw + 'x' + vh;
@@ -8053,7 +8106,7 @@ function harbourHit(x, y) {
 /* =====================================================================
    Boot
    ===================================================================== */
-function retheme() { readColors(); tileCache.clear(); renderBase(); }
+function retheme() { readColors(); tileCache.clear(); LAND.key = landKey(); LAND.dirty = false; renderBase(); }
 function start(data) {
   readColors(); buildNav(); initNodes(); buildMapPaths(); buildIslets(); gfxInit(); loadRelief(); loadDepth();
   resize(); renderBase();
@@ -8070,7 +8123,7 @@ function start(data) {
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
 }
-window.__tugboatMap = MAP; window.__tugboat = { WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
+window.__tugboatMap = MAP; window.__tugboat = { landTick, landPal, WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
     for (const type of ['schooner2', 'schooner3', 'steambarge', 'laker', 'canaller', 'passenger']) { [0, .8, 1.57, 2.6, 3.14, -1.57].forEach((a, i) => { const v = { type, name: type, lenFt: type === 'laker' ? 500 : type === 'canaller' ? 255 : type === 'steambarge' ? 190 : 130, loaded: i % 2 === 0, cargo: 'lumber', hue: '#2f3a40' }; const L = shipLen(v); ctx.save(); ctx.translate(60 + i * 110, y); ctx.scale(scale / 2, scale / 2); ctx.rotate(a); drawShipBody(v, L, a, 0, false); ctx.restore(); }); y += 95; } ctx = keep; }, addShip, shipType, seaPath, shipsDay, advance(days) { for (let d = 0; d < days; d += .05) { simAdvance(.05); moveTraffic(.05); if (Math.floor(S.day) !== lastTrafficDay) { lastTrafficDay = Math.floor(S.day); trafficDay(); } } }, vehicles,  get WET() { return WET; }, CELL, isWet, NETPOS, RAIL_SEGS, ROAD_SEGS, ll, homeView, renderHI, clampCam, get fling() { return fling; }, get gesture() { return gesture; }, get HI() { return HI; }, get S() { return S; }, simAdvance, startSeason, endSeason, newGame, PORT, GROUND, MODELS, getPath, nodePos, deliveryValue, distKm, buyTug, saveRoute, assignGround, netWorth, ui, select, cam, get GW() { return GW; }, get GH() { return GH; }, get WATER() { return WATER; } };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
