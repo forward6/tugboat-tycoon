@@ -652,26 +652,26 @@ const PLAN = (() => {
     },
     // ---------- the upper-lake passenger steamer ----------
     passenger: {
-      top: g => g.D(g.L * .5) + 62,
+      top: g => g.D(g.L * .5) + (g.o.day ? 38 : 62),
       ext: g => [g.L * .02, g.L * .02],
       secH: () => 26,
       draw(k) {
-        const { L, B, T, D, P, Pp, rect, rectP, area, line, dash, hidC, lab, range, hb, C } = k, z = (L / 300) ** .3;
+        const { L, B, T, D, P, Pp, rect, rectP, area, line, dash, hidC, lab, range, hb, C } = k, o = k.o || {}, z = (L / 300) ** .3;
         // the hull's side ports, then two decks of cabins and the boat deck
         for (let x = L * .1; x < L * .9; x += 7) k.circ(x, D(x) - 4, .7, C.glass, .7);
         const base = D(L * .5), d1 = house(k, .1, .9, 9, { base, spacing: 4.2, doors: [.15, .5, .85] }), d2 = house(k, .16, .84, 8.5, { base: d1 + .35, spacing: 4.2, doors: [.3, .7] });
         const ptop = pilotHouse(k, .8, .86, d2 + .35, 8.5, { windows: 5 });
-        lab('A', 'Pilot house', L * .83, ptop - 3); lab('A', 'Dining saloon and staterooms', L * .5, d1 - 3); lab('A', 'Promenade deck', L * .35, d2 - 2);
-        const st = stack(k, .5, 12 * z, d2 + .35, D(L * .5) + 60, { band: true, whistle: true }); lab('A', 'Stack', st.x, st.top + .3);
-        for (const f of [.93, .12]) { const x = L * f, b0 = f > .5 ? D(x) : d2; line(P([[x, b0], [x, b0 + (f > .5 ? 52 : 40)]]), 2); }
-        lab('A', 'Masts', L * .12, d2 + 30);
-        for (const f of [.2, .3, .62, .72]) yawl(k, L * f - 9, 20, d2 + .35); lab('A', 'Lifeboats', L * .25, d2 + 3);
+        lab('A', 'Pilot house', L * .83, ptop - 3); lab('A', o.day ? 'Saloon and lunch counter' : 'Dining saloon and staterooms', L * .5, d1 - 3); lab('A', o.day ? 'Open promenade deck' : 'Promenade deck', L * .35, d2 - 2);
+        const st = stack(k, .5, (o.day ? 7 : 12) * z, d2 + .35, D(L * .5) + (o.day ? 34 : 60), { band: true, whistle: true }); lab('A', 'Stack', st.x, st.top + .3);
+        for (const f of [.93, .12]) { const x = L * f, b0 = f > .5 ? D(x) : d2; line(P([[x, b0], [x, b0 + (f > .5 ? 52 : 40) * (o.day ? .5 : 1)]]), 2); }
+        lab('A', o.day ? 'Flagstaffs' : 'Masts', L * .12, d2 + (o.day ? 16 : 30));
+        for (const f of o.day ? [.25, .65] : [.2, .3, .62, .72]) yawl(k, L * f - 9, Math.min(20, L * .12), d2 + .35); lab('A', 'Lifeboats', L * .25, d2 + 3);
         const e0 = L * .38, e1 = L * .48, ec = T * .4; dash(rect(e0, 2, e1, D(e0) - 1)); hidC((e0 + e1) / 2, ec, .1 * T); shaft(k, e0, ec);
         dash(rect(L * .5, 2, L * .62, D(L * .5) - 1)); dash(rect(L * .65, 2, L * .9, D(L * .7) - 1));
         lab('B', 'Engine', (e0 + e1) / 2, T * .7, 1); lab('B', 'Boilers', L * .56, T * .6, 1); lab('B', 'Package freight below', L * .78, T * .5, 1);
         fillHull(k, .1, .9, 1.5, C.tint); fillHull(k, .16, .84, 4, C.paper);
         area(rectP(L * .8, -B * .25, L * .86, B * .25), C.tint, 1.2); k.circP(L * .5, 0, 6 * z, C.smoke);
-        for (const f of [.2, .3, .62, .72]) for (const sg of [-1, 1]) yawlPlan(k, L * f - 9, 20, 6, sg * (B / 2 - 7));
+        for (const f of o.day ? [.25, .65] : [.2, .3, .62, .72]) for (const sg of [-1, 1]) yawlPlan(k, L * f - 9, Math.min(20, L * .12), Math.min(6, B * .2), sg * (B / 2 - Math.min(7, B * .22)));
       },
       sec(k, { Q, b, dk }) { const { area, C } = k; area(`M${Q(-b + 1.5, dk)}L${Q(-b + 1.5, dk + 9)}L${Q(b - 1.5, dk + 9)}L${Q(b - 1.5, dk)}Z`, C.paper, 1.2); area(`M${Q(-b + 4, dk + 9.35)}L${Q(-b + 4, dk + 18)}L${Q(b - 4, dk + 18)}L${Q(b - 4, dk + 9.35)}Z`, C.paper, 1.2); },
     },
@@ -686,6 +686,7 @@ const PLAN = (() => {
     woodwrecker: ['wrecker', { onHouse: 1, stackH: 22, boilerLabel: 'Firebox boiler', engine: 'High-pressure engine', derrick: 1, pumps: 1, yawls: 1 }],
     hooker: ['steambarge', { wood: 1, boilerLabel: 'Firebox boilers', engine: 'Steeple compound engine' }],
     alligator: ['alligator', { engine: 'Engine: paddles and winch' }],
+    excursion: ['passenger', { day: 1 }],
     steelcompound: ['tug', { onHouse: 1, steel: 1, scotch: 1, stackH: 20, cylinders: 2, boilerLabel: 'Scotch boiler', engine: 'Fore-and-aft compound engine' }],
     steelwrecker: ['wrecker', { onHouse: 1, steel: 1, scotch: 1, boilers: 2, stackH: 24, cylinders: 3, boilerLabel: 'Two Scotch boilers', engine: 'Triple-expansion engine', derrick: 1, pumps: 1, searchlight: 1, yawls: 1 }],
     diesel: ['diesel', { steel: 1, engine: 'Enterprise diesel engine' }],

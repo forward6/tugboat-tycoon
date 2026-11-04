@@ -17,7 +17,7 @@
   --surface:#fbf7ec; --surface-2:#efe6cf; --magenta:#a3306a; --on-magenta:#ffffff;
   --player:#1c2731; --rival:#9c4126; --good:#35704a; --warn:#9d7015; --bad:#ab352d; --money:#2c6a3c;
   --shadow:rgba(28,39,49,.22); --scrim:rgba(28,39,49,.45);
-  --c-logs:#8b5a2b; --c-lumber:#b98a36; --c-coal:#3d4248; --c-supplies:#3f6f9a; --c-fish:#3f8282; --c-grain:#9a8a1f;
+  --c-logs:#8b5a2b; --c-lumber:#b98a36; --c-coal:#3d4248; --c-supplies:#3f6f9a; --c-fish:#3f8282; --c-grain:#9a8a1f; --c-visitors:#7a55a8;
   --h1:#3a6ea5; --h2:#c0582c; --h3:#2a8a6a; --h4:#b8860b; --h5:#8e4f8f; --hx:#a59f8c;
   --font-display:"IM Fell English SC","Iowan Old Style","Palatino Linotype",Georgia,serif;
   --font-chart:"IM Fell English","Iowan Old Style","Palatino Linotype",Georgia,serif;
@@ -32,7 +32,7 @@
     --surface:#151c21; --surface-2:#1d272d; --magenta:#e56aa3; --on-magenta:#1b0e15;
     --player:#eef3f1; --rival:#ec8f66; --good:#83c592; --warn:#e5b961; --bad:#f2827a; --money:#93d6a3;
     --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.58);
-    --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --c-grain:#d6c766; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
+    --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --c-grain:#d6c766; --c-visitors:#b9a1e6; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
     color-scheme:dark;
   }
 }
@@ -42,7 +42,7 @@
   --surface:#151c21; --surface-2:#1d272d; --magenta:#e56aa3; --on-magenta:#1b0e15;
   --player:#eef3f1; --rival:#ec8f66; --good:#83c592; --warn:#e5b961; --bad:#f2827a; --money:#93d6a3;
   --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.58);
-  --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --c-grain:#d6c766; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
+  --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --c-grain:#d6c766; --c-visitors:#b9a1e6; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
   color-scheme:dark;
 }
 [hidden]{display:none!important}
@@ -474,6 +474,7 @@ const CARGO = {
   coal:     { name: 'Coal',     rate: 30 },
   supplies: { name: 'Supplies', rate: 44 },
   grain:    { name: 'Grain',    rate: 34 },
+  visitors: { name: 'Summer visitors', rate: 58 },
 };
 const CARGO_IDS = Object.keys(CARGO);
 
@@ -493,6 +494,10 @@ const MODELS = {
                    spec: { like: 'the W. L. Wetmore (Cleveland, 1871), which carried Parry Sound lumber with her barges Brunette and James C. King until all three were wrecked near Tobermory in 1901', engine: 'Steeple compound', hp: 'about 400 hp', rpm: 'about 80 rpm',
                      boiler: 'Firebox boilers, coal', len: 160, beam: 30, draft: 11, crew: 'about 14, and three or four on each barge', about: true },
                    blurb: 'A wooden steamer built to carry lumber: a deck load stacked high, more in her hold, and old schooners cut down to barges on a line astern. She carries far more than a tug can tow, but she is slow, and she takes no tows, salvage or log booms.' },
+  excursion:     { kind: 'tow', pax: true, name: 'Excursion steamer', year: 1895, to: 1935, price: 14000, power: 4, kn: 12, raftKn: 0, op: 20, risk: 1.05,
+                   spec: { like: '/*EXCURSION_LIKE*/', engine: 'Fore-and-aft compound engine', hp: 'about 350 hp', rpm: 'about 110 rpm',
+                     boiler: 'Scotch boiler, coal', len: 130, beam: 26, draft: 8, crew: 'about 12', about: true },
+                   blurb: 'A white day steamer with saloons below and an open promenade above, for the summer trade among the islands: visitors out from the railway towns to the resorts and cottages, and their groceries, ice and mail. She carries no other cargo and takes no tows, and out of the summer she keeps a skeleton crew.' },
   woodwrecker:   { kind: 'tow', wreck: true, name: 'Wooden wrecking tug', year: 1874, to: 1905, price: 9500, power: 4, kn: 9.5, raftKn: 1.3, op: 15, risk: 1.15,
                    spec: { like: 'the Erie Belle (Cleveland, 1862), a wrecking tug whose boiler blew up off Kincardine in 1883 as she worked to free a stranded schooner', engine: 'High-pressure engine', hp: 'about 150 hp', rpm: 'about 100 rpm',
                      boiler: 'Firebox boiler, coal', len: 117, beam: 20, draft: 9.5, crew: '12', aboutDraft: true },
@@ -747,6 +752,8 @@ const EVENTS = [
     effect: ['Lumber pays half as much at Port Huron.'] },
   { id: 'depot', date: [1897, 9, 1], head: 'Depot Harbour opens', body: "The Canada Atlantic Railway's new port on Parry Island is open for business.",
     effect: ['New port: Depot Harbour, near Parry Sound.'] },
+  { id: 'tourists', date: [1895, 5, 20], head: 'Summer visitors for the islands', body: 'Every summer more people come up from Toronto and the cities to the south by train, bound for the hotels and cottages among the islands of the eastern shore. The yards are building white excursion steamers to carry them out from the railway towns.',
+    effect: ['In July and August summer visitors wait at Midland, Penetanguishene, Parry Sound and Collingwood for the resorts, and go home again at the end of the summer. Only an excursion steamer carries them.', 'The resorts want supplies all summer: groceries, ice, coal oil and the mail.'] },
   { id: 'mfg', date: [1898, 5, 1], major: true, head: 'Logs must be sawn in Ontario',
     body: 'Ontario now requires pine cut on Crown land to be sawn in the province. The log rafts to Michigan are finished.',
     effect: ['Logs no longer sell at Bay City.', 'Ontario sawmills want half again as many logs.'] },
@@ -1091,6 +1098,8 @@ const tradeGrowth = day => 1 + .02 * clamp((day - dayOf(1870, 1, 1)) / 365, 0, 6
 function demandRate(pid, c, day = S.day) {
   if (!portOpen(pid, day)) return 0;
   if (c === 'grain') return day < GRAIN_FROM ? 0 : (GRAIN_DEMAND[pid] || 0) * tradeGrowth(day) * effectMult(pid, c, 'demand');
+  if (c === 'visitors') return visitorRate(pid, day, 'demand');
+  if (c === 'supplies' && PORT[pid].resort) return resortSupplies(pid, day);
   let r = baseRate(PORT[pid], 'demand', c, day) * tradeGrowth(day); if (!r) return 0;
   if (pid === 'baycity' && c === 'logs') r = day < D.michigan ? 0 : day < D.rafts ? .5 : day < D.mfg ? 1.5 : day < D.pulp ? 0 : .35; // pulpwood for the Saginaw Valley paper mills
   if (pid === 'gateway') {
@@ -1109,6 +1118,7 @@ function demandRate(pid, c, day = S.day) {
 function supplyRate(pid, c, day = S.day) {
   if (!portOpen(pid, day)) return 0;
   if (c === 'grain') return grainSupply(pid, day) * effectMult(pid, c, 'supply');
+  if (c === 'visitors') return visitorRate(pid, day, 'supply');
   let r = baseRate(PORT[pid], 'supply', c, day) * tradeGrowth(day); if (!r) return 0;
   if (pid === 'owensound' && c === 'supplies' && day >= D.cpr && day < D.mcnicoll) r *= 1.6;
   if (pid === 'midland' && c === 'lumber' && day >= D.railMid) r *= 2.5;
@@ -1127,7 +1137,7 @@ function rateMult(c, pid) {
 const cargoName = c => c === 'logs' && S && S.day >= D.pulp ? 'Pulpwood' : CARGO[c].name;
 const ageOf = t => Math.max(0, (S.day - t.bought) / 365);
 // Old boats burn more coal and need more patching; wartime crews cost more.
-const runCost = t => MODELS[t.model].op * Math.min(1.6, 1 + .012 * ageOf(t)) * (atWar(S.day) ? 1.15 : 1);
+const runCost = t => MODELS[t.model].op * Math.min(1.6, 1 + .012 * ageOf(t)) * (atWar(S.day) ? 1.15 : 1) * (MODELS[t.model].pax && !tourSeason(S.day) ? .4 : 1);
 function priceFactor(pid, c) {
   const r = demandRate(pid, c); if (r <= 0) return 0;
   return 1.3 / (1 + (S.ports[pid].glut[c] || 0) / (r * 40));
@@ -1154,7 +1164,7 @@ const closedSeason = (day = S.day) => day >= D.fisheries && monthOf(day) === 11;
 /* =====================================================================
    New game
    ===================================================================== */
-function newLedger(year) { return { year, logs: 0, lumber: 0, coal: 0, supplies: 0, fish: 0, grain: 0, tows: 0, harbour: 0, salvage: 0, insurance: 0, sales: 0,
+function newLedger(year) { return { year, logs: 0, lumber: 0, coal: 0, supplies: 0, fish: 0, grain: 0, visitors: 0, tows: 0, harbour: 0, salvage: 0, insurance: 0, sales: 0,
   running: 0, repairs: 0, refit: 0, premiums: 0, interest: 0, licences: 0, fines: 0, nets: 0, ice: 0, penalties: 0, capital: 0 }; }
 function newGame(seed) {
   S = { v: 1, seed: (seed || (Date.now() & 0x7fffffff)) | 0, day: dayOf(1870, 4, 20), year: 1870, season: true, seasonClose: dayOf(1870, 12, 6),
@@ -1676,6 +1686,7 @@ function addNews(text, opts = {}) {
 }
 function checkEvents() {
   wreckNews();
+  for (const p of PORTS) if (p.resort && p.openDay && S.day >= p.openDay && !S.fired['r:' + p.id]) { S.fired['r:' + p.id] = true; if (S.day - p.openDay < 30) addNews(p.resort.news || `${p.name} opens for the summer visitors.`); }
   for (const e of EVENTS) {
     if (S.fired[e.id] || S.day < e.day) continue;
     S.fired[e.id] = true;
@@ -1723,7 +1734,7 @@ const galeSoon = () => S.weather.warn;
 const isFish = t => MODELS[t.model].kind === 'fish';
 const isWarp = t => !!MODELS[t.model].warp;
 // which tows and salvage a boat can take: an alligator and a lumber hooker take none; a wrecking tug takes any salvage
-const canTake = (t, j) => { const m = MODELS[t.model]; return !m.warp && !m.hooker && (m.power >= j.minPower || (!!m.wreck && j.kind === 'salvage')); };
+const canTake = (t, j) => { const m = MODELS[t.model]; return !m.warp && !m.hooker && !m.pax && (m.power >= j.minPower || (!!m.wreck && j.kind === 'salvage')); };
 const towLoads = t => t.tow.reduce((s, g) => s + g.n, 0);
 // Speeds in km a day. Masters ran by daylight among the islands, about 14 hours steaming;
 // a big log raft crept along at a knot or two, day and night.
@@ -1975,6 +1986,7 @@ function routeStop(t, pid) {
   const cap = MODELS[t.model].power;
   const opts = [];
   for (const c of CARGO_IDS) {
+    if (!canCarry(t, c)) continue;
     const stock = Math.floor(P.stock[c] || 0); if (stock < 1) continue;
     let best = 0; for (const s of later) best = Math.max(best, valueAt(t, s, c, pid));
     if (best > 0) opts.push({ c, stock, v: best * (c === 'logs' && !MODELS[t.model].hooker ? 3 : 1) });
@@ -2045,6 +2057,7 @@ function contractCustomer(c, to, y) {
   if (c === 'logs') return to === 'waubaushene' && y < 1926 ? 'the Georgian Bay Lumber Co.' : to === 'baycity' ? 'the Saginaw River mills' : `the sawmills at ${name}`;
   if (c === 'coal') { const r = railOwnerAt(to, y); return r ? `the ${r}, for its engines at ${name}` : `the coal dealers at ${name}`; }
   if (c === 'lumber') return `the lumber dealers at ${name}`;
+  if (PORT[to].resort) return PORT[to].resort.hotel ? `the ${PORT[to].resort.hotel}` : `the cottagers at ${name}`;
   if (c === 'grain') return GRAIN_MILLS.has(to) ? `the flour mills at ${name}` : baseRate(PORT[to], 'supply', 'logs', S.day) ? `the lumber camps at ${name}, for their horses` : `the feed merchants at ${name}`;
   return baseRate(PORT[to], 'supply', 'logs', S.day) ? `the lumber camps at ${name}` : `the merchants at ${name}`;
 }
@@ -2063,6 +2076,7 @@ function makeOffer(o = {}) {
   if (!wantFish && power) {
     const maxKm = Math.max(...towers.map(t => MODELS[t.model].kn)) >= 10 ? 420 : 300, cands = [];
     for (const c of o.c ? [o.c] : CARGO_IDS) for (const to of PORTS) {
+      if (c === 'visitors') continue;
       if (!portOpen(to.id) || to.gateway && c !== 'lumber' || demandRate(to.id, c) <= 0) continue;
       for (const from of PORTS) {
         if (from.id === to.id || usRun(from.id, to.id) || !portOpen(from.id) || supplyRate(from.id, c) <= 0 || (o.from && from.id !== o.from) || (o.to && to.id !== o.to)) continue;
@@ -2265,6 +2279,7 @@ function rivalOffer(c) {
   } else {
     const cands = [];
     for (const cg of CARGO_IDS) for (const from of ports) for (const to of PORTS) {
+      if (cg === 'visitors') continue;
       if (to.id === from || !portOpen(to.id) || (to.gateway && cg !== 'lumber') || demandRate(to.id, cg) <= 0 || supplyRate(from, cg) <= 0 || usRun(from, to.id) || taken.has(cg + from + to.id)) continue;
       const d = distKm(from, to.id); if (d >= 35 && d <= 300) cands.push({ cg, from, to: to.id, d });
     }
@@ -2487,6 +2502,7 @@ function dailyTick() {
     const P = S.ports[p.id];
     for (const c of CARGO_IDS) {
       const s = supplyRate(p.id, c);
+      if (c === 'visitors') { P.stock[c] = s > 0 ? Math.min((P.stock[c] || 0) * .8 + s, Math.max(2, s * 5)) : 0; continue; }
       if (s > 0) P.stock[c] = Math.min((P.stock[c] || 0) + s, Math.max(4, s * 25));
       else if (P.stock[c] && !baseRate(p, 'supply', c, S.day)) P.stock[c] = P.stock[c] > .1 ? P.stock[c] * .97 : 0;
       if (P.glut[c]) P.glut[c] *= .95;
@@ -2575,7 +2591,7 @@ function netWorth() {
   for (const p of PORTS) { const b = S.ports[p.id].built; if (b.icehouse) v += 700; if (b.coaldock) v += 1500; }
   return v + (S.mkt ? holdingsValue() : 0);
 }
-const ledgerRevenue = L => L.logs + L.lumber + L.coal + L.supplies + L.fish + L.tows + L.salvage + (L.harbour || 0) + (L.grain || 0) + L.insurance + (L.divIn || 0);
+const ledgerRevenue = L => L.logs + L.lumber + L.coal + L.supplies + L.fish + L.tows + L.salvage + (L.harbour || 0) + (L.grain || 0) + (L.visitors || 0) + L.insurance + (L.divIn || 0);
 const ledgerCost = L => L.running + L.repairs + L.refit + L.premiums + L.interest + L.licences + L.fines + L.nets + L.ice + (L.divOut || 0) + (L.penalties || 0);
 
 /* =====================================================================
@@ -2860,7 +2876,7 @@ function readColors() {
     shield: g('--shield'), treeDark: g('--tree-dark'), rock: g('--rock'), water: g('--water'), shoal: g('--shoal'), coast: g('--coast'), river: g('--river'),
     ink: g('--ink'), ink2: g('--ink-2'), rule: g('--rule'), surface: g('--surface'), surface2: g('--surface-2'), magenta: g('--magenta'),
     player: g('--player'), rival: g('--rival'), good: g('--good'), warn: g('--warn'), bad: g('--bad'), money: g('--money'),
-    logs: g('--c-logs'), lumber: g('--c-lumber'), coal: g('--c-coal'), supplies: g('--c-supplies'), fish: g('--c-fish'), grain: g('--c-grain'),
+    logs: g('--c-logs'), lumber: g('--c-lumber'), coal: g('--c-coal'), supplies: g('--c-supplies'), fish: g('--c-fish'), grain: g('--c-grain'), visitors: g('--c-visitors'),
     sand: g('--sand'), relief: g('--relief'), quartz: g('--quartz'), roofA: g('--roof-a'), roofB: g('--roof-b'), roofC: g('--roof-c'), wall: g('--wall'), wood: g('--wood'),
     road: g('--road'), roadCasing: g('--road-casing'), street: g('--street'), elevator: g('--elevator'), coalPile: g('--coal-pile'), lumberPile: g('--lumber-pile'), stackP: g('--stack-p') };
 }
@@ -3579,12 +3595,51 @@ function shipByLake(pid, cargo, n) {
   const y = yearOf(S.day), dest = wpick({ tonawanda: 6, buffalo: 1.5, toledo: .5, detroit: .5 }), type = shipType(cargo, y);
   if (type && addShip(type, cargo, OFFMAP[dest][1], pid, OFFMAP[dest][1], 'export', { dest, yours: true, loads: Math.round(P.lakeQ) })) P.lakeQ = 0;
 }
+/* ---------- summer visitors (from 1895): they come up by train to the railway towns in July and August and go out by
+   steamer to the resorts and cottages of the islands, and home again at the end of the summer. The trade grows to the
+   First World War, booms in the 1920s, falls away in the Depression and the war, and fades after Highway 400 opens in
+   1952, when they drive up instead. Only a passenger boat carries them; the resorts want supplies all summer. ---------- */
+const TOUR_FROM = dayOf(1895, 6, 1), PAX_LOAD = 40;
+const TOUR_GATES = { midland: .55, penetang: .4, parrysound: .4, collingwood: .2 };
+const isPax = t => !!MODELS[t.model].pax;
+const canCarry = (t, c) => isPax(t) ? c === 'visitors' || c === 'supplies' : c !== 'visitors';
+// How busy the summer is on a given day: the high season is July and August
+function tourSeason(day) {
+  const d = dateOf(day), m = d.getUTCMonth() + 1, dd = d.getUTCDate();
+  return m === 7 || (m === 8 && dd <= 25) ? 1 : m === 6 && dd >= 15 ? .35 : (m === 8 && dd > 25) || (m === 9 && dd <= 10) ? .5 : 0;
+}
+function tourEra(y) {
+  if (y < 1895) return 0;
+  if (y < 1914) return .35 + .65 * (y - 1895) / 19;
+  if (y < 1919) return .75;
+  if (y < 1930) return 1.15;
+  if (y < 1936) return .6;
+  if (y < 1940) return .85;
+  if (y < 1946) return .7;
+  if (y < 1953) return 1.1;
+  return Math.max(.25, 1.1 - (y - 1952) * .08);
+}
+// Visitors waiting to go (supply) and wanted (demand): at the railway towns going out, at the resorts going home
+function visitorRate(pid, day, kind) {
+  if (day < TOUR_FROM || !portOpen(pid, day)) return 0;
+  const k = tourSeason(day) * tourEra(yearOf(day)); if (!k) return 0;
+  const p = PORT[pid], late = dateOf(day).getUTCMonth() >= 7 && dateOf(day).getUTCDate() > 20 || dateOf(day).getUTCMonth() >= 8;
+  if (p.resort) return k * p.resort.size * (kind === 'demand' ? (late ? .35 : .7) : (late ? .7 : .3));
+  const g = TOUR_GATES[pid] || 0; if (!g || (p.railDay && day < p.railDay)) return 0;
+  return k * g * (kind === 'supply' ? (late ? .4 : 1) : (late ? .8 : .35));
+}
+// The resorts want supplies (groceries, ice, coal oil and the mail) through the summer, and a little in the spring and fall
+function resortSupplies(pid, day) {
+  if (!portOpen(pid, day)) return 0;
+  const m = dateOf(day).getUTCMonth() + 1, k = m >= 6 && m <= 9 ? 1 : .15;
+  return PORT[pid].resort.size * .22 * k * Math.max(.4, tourEra(yearOf(day)));
+}
 /* ---------- harbour work: from 1876 a tug stationed at a port tows the sailing ships in and out and eases the steamers
    alongside, for a fee each time a lake ship comes in or goes out. Other companies' tugs lying at the same port share
    the work. ---------- */
 const HARBOUR_FROM = 1876;
 const harbourOpen = () => yearOf(S.day) >= HARBOUR_FROM;
-const canHarbour = t => t.owner === 'p' && !isFish(t) && !isWarp(t) && !MODELS[t.model].hooker;
+const canHarbour = t => t.owner === 'p' && !isFish(t) && !isWarp(t) && !MODELS[t.model].hooker && !MODELS[t.model].pax;
 function harbourFee(v, dir) {
   const T = SHIP_TYPES[v.type] || {}, y = yearOf(S.day);
   let f = T.sail ? 30 + 5 * (T.sail - 2) : v.type === 'steambarge' ? 20 + 8 * ((v.consorts || []).length) : v.type === 'laker' ? 32 + (v.lenFt > 400 ? 14 : 0) : v.type === 'passenger' ? 20 : 22;
@@ -3660,7 +3715,7 @@ function portPlace(pid) {
   const p = PORT[pid], D = nodePos('p:' + pid), C = snapLand(...ll(...p.at));
   let S0 = C, ux = D[0] - C[0], uy = D[1] - C[1], L = Math.hypot(ux, uy) || 1; ux /= L; uy /= L;
   for (let d = 0; d < L; d += .05) { const x = D[0] - ux * d, y = D[1] - uy * d; if (!isWet(x, y)) { S0 = [x, y]; break; } }
-  const size = p.gateway ? 1.3 : p.major ? 1 : .65;
+  const size = p.gateway ? 1.3 : p.major ? 1 : p.resort ? .3 : .65;
   pl = { pid, D, C, S: S0, u: [ux, uy], v: [-uy, ux], size, town: townLayout('p:' + pid, C, [-ux, -uy], size, 1850, S0) };
   PLACES.set(pid, pl); return pl;
 }
@@ -4294,7 +4349,7 @@ function drawTug(t, sx, sy, zr, now) {
   const hullCol = mine ? COL.player : (RIVAL[t.co] && RIVAL[t.co].color) || COL.rival;
   ctx.save(); ctx.translate(sx, sy); ctx.rotate(a); ctx.scale(f, f);
   // the tow, astern
-  const nT = towLoads(t), stern = fish ? -8.5 : m.hooker ? -14 : m.warp ? -4.5 : -(m.power >= 6 ? 11.5 : 10);
+  const nT = m.pax ? 0 : towLoads(t), stern = fish ? -8.5 : m.hooker ? -14 : m.warp ? -4.5 : -(m.power >= 6 ? 11.5 : 10);
   if (m.hooker) drawHookerBarges(t, stern);
   else if (m.warp) { if (S.season && t.state === 'warp' && !(t.warpReady && S.day < t.warpReady)) drawWarpBoom(stern, now); }
   else if (t.boom && nT > 0) {
@@ -4326,6 +4381,7 @@ function drawTug(t, sx, sy, zr, now) {
   else if (fish) drawFishTugShape(t, m, hullCol, mine, a);
   else if (m.warp) drawAlligatorShape(hullCol, mine, a);
   else if (m.hooker) drawHookerShape(t, hullCol, mine, a);
+  else if (m.pax) drawExcursionShape(t, hullCol, mine, a);
   else drawTowTugShape(t, m, hullCol, mine, a, f);
   ctx.restore();
   if (t.state === 'wait' && t.owner === 'p') { ctx.font = `bold 11px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; halo('weatherbound', sx, sy + 9 * f, COL.warn); }
@@ -4333,6 +4389,24 @@ function drawTug(t, sx, sy, zr, now) {
 function hullPath(L, B) {
   ctx.beginPath(); ctx.moveTo(L, 0); ctx.bezierCurveTo(L * .6, -B * 1.08, -L * .35, -B, -L * .86, -B * .86); ctx.quadraticCurveTo(-L * 1.03, 0, -L * .86, B * .86);
   ctx.bezierCurveTo(-L * .35, B, L * .6, B * 1.08, L, 0); ctx.closePath();
+}
+// The excursion steamer: a white hull with her company's colour along the sheer, two decks of cabins, the pilot house
+// forward and her stack amidships; when she has visitors aboard they crowd the upper deck
+function drawExcursionShape(t, hullCol, mine, a = 0) {
+  const L = 12, B = 2.9, [lx, ly] = boatLight(a), dx = -lx * .8, dy = -ly * .8;
+  const hull = () => { ctx.beginPath(); ctx.moveTo(L, 0); ctx.quadraticCurveTo(L * .75, -B, L * .35, -B); ctx.lineTo(-L * .78, -B); ctx.quadraticCurveTo(-L * 1.02, -B * .85, -L, 0); ctx.quadraticCurveTo(-L * 1.02, B * .85, -L * .78, B); ctx.lineTo(L * .35, B); ctx.quadraticCurveTo(L * .75, B, L, 0); ctx.closePath(); };
+  hull(); ctx.fillStyle = shadeHull('#f4f1ea', B, ly); ctx.fill(); ctx.strokeStyle = hullCol; ctx.lineWidth = 1.1; ctx.stroke();
+  ctx.fillStyle = SHADOW; ctx.fillRect(-L * .74 + dx, -B * .7 + dy, L * 1.28, B * 1.4);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(-L * .74, -B * .7, L * 1.28, B * 1.4); ctx.strokeStyle = rgba('#1c2731', .45); ctx.lineWidth = .35; ctx.strokeRect(-L * .74, -B * .7, L * 1.28, B * 1.4);
+  ctx.fillStyle = rgba('#1c2731', .35); for (let x = -L * .68; x < L * .5; x += 1.3) { ctx.fillRect(x, -B * .7, .55, .35); ctx.fillRect(x, B * .7 - .35, .55, .35); }
+  ctx.fillStyle = SHADOW; ctx.fillRect(-L * .5 + dx * 1.4, -B * .5 + dy * 1.4, L * .85, B);
+  ctx.fillStyle = '#efe9dc'; ctx.fillRect(-L * .5, -B * .5, L * .85, B); ctx.strokeStyle = rgba('#1c2731', .4); ctx.strokeRect(-L * .5, -B * .5, L * .85, B);
+  ctx.fillStyle = '#efe9dc'; ctx.fillRect(L * .4, -B * .42, L * .14, B * .84); ctx.fillStyle = '#9fd3e6'; ctx.fillRect(L * .5, -B * .32, .45, B * .64);
+  const n = t.tow.reduce((s, g) => s + (g.c === 'visitors' ? g.n : 0), 0);
+  if (n > 0) { const pr = mulberry(t.id.length * 7 + 3), cols = ['#a3306a', '#3a6ea5', '#e9c46a', '#2a8a6a', '#c0582c', '#1c2731'];
+    for (let i = 0; i < Math.min(26, 6 + n * 5); i++) { ctx.fillStyle = cols[Math.floor(pr() * cols.length)]; ctx.beginPath(); ctx.arc(-L * .46 + pr() * L * .78, -B * .42 + pr() * B * .84, .3, 0, 7); ctx.fill(); } }
+  ctx.fillStyle = SHADOW; ctx.beginPath(); ctx.arc(-L * .08 + dx * 2.4, dy * 2.4, 1.5, 0, 7); ctx.fill();
+  drawStack(-L * .08, 1.5, mine, false);
 }
 function drawStack(x, r, mine, dieselish) {
   const base = mine ? COL.stackP : '#1c1c1c', band = mine ? COL.magenta : '#c0392b';
@@ -5043,7 +5117,7 @@ const cargoDot = c => `<span class="dot" style="background:var(--c-${c})"></span
 function towWords(t) {
   if (!t.tow.length) return '';
   if (t.boom) { const n = Math.round(towLoads(t)); return `a ${cargoName('logs').toLowerCase().replace(/^logs$/, 'log')} boom of ${n} load${n === 1 ? '' : 's'}`; }
-  return t.tow.map(g => `${Math.round(g.n)} ${cargoName(g.c).toLowerCase()}`).join(', ');
+  return t.tow.map(g => g.c === 'visitors' ? `${Math.round(g.n * PAX_LOAD)} summer visitors` : `${Math.round(g.n)} ${cargoName(g.c).toLowerCase()}`).join(', ');
 }
 function statusOf(t) {
   const at = t.at ? PORT[t.at].name : null;
@@ -5083,6 +5157,7 @@ const GLYPHS = {
   woodwrecker: (c, bd) => `<path d="M2 14h17l-2 3H4z" fill="${c}"/><rect x="4" y="10" width="8" height="4" fill="${c}"/><rect x="6.5" y="4" width="2.2" height="6" fill="${c}"/><rect x="6.5" y="5" width="2.2" height="1.2" fill="${bd}"/><path d="M13.5 14V5M13.5 7l6 -3M19.5 4v5" fill="none" stroke="${c}" stroke-width="1.2"/>`,
   steelwrecker: (c, bd) => `<path d="M1 13h20l-2 4H2z" fill="${c}"/><path d="M2.5 15h17" stroke="var(--surface)" stroke-width=".6" stroke-dasharray=".8 1.4"/><rect x="3" y="9" width="9" height="4" fill="${c}"/><rect x="8" y="6" width="4" height="3" fill="${c}"/><rect x="5" y="3" width="2.4" height="6" fill="${c}"/><rect x="5" y="4" width="2.4" height="1.2" fill="${bd}"/><path d="M14 13V3M14 5l6.5 -2.5M20.5 2.5v6" fill="none" stroke="${c}" stroke-width="1.3"/>`,
   diesel: (c, bd) => `<path d="M2 14h18l-3 3H4z" fill="${c}"/><rect x="5" y="10" width="11" height="4" fill="${c}"/><rect x="11" y="6.5" width="5" height="3.5" fill="${c}"/><rect x="7" y="7.5" width="3" height="2.5" fill="${c}"/><rect x="7" y="8.2" width="3" height=".9" fill="${bd}"/>`,
+  excursion: (c, bd) => `<path d="M1 14h20l-2 3H2.5z" fill="${c}"/><rect x="3" y="10" width="15" height="4" fill="var(--surface)" stroke="${c}" stroke-width=".8"/><rect x="5" y="7" width="10" height="3" fill="var(--surface)" stroke="${c}" stroke-width=".8"/><path d="M4.5 12h1.4M7.5 12h1.4M10.5 12h1.4M13.5 12h1.4" stroke="${c}" stroke-width=".8"/><rect x="9.2" y="2.5" width="2" height="4.5" fill="${bd}"/>`,
   hooker: (c, bd) => `<path d="M1 14h20l-2 3H2z" fill="${c}"/><rect x="6" y="10" width="11" height="4" fill="var(--c-lumber)"/><path d="M6 12h11" stroke="${c}" stroke-width=".5" opacity=".5"/><rect x="2" y="9" width="3.4" height="5" fill="${c}"/><rect x="18" y="10" width="2" height="4" fill="${c}"/><rect x="3" y="4.5" width="1.6" height="4.5" fill="${bd}"/>`,
   alligator: (c, bd) => `<path d="M3 13h15l2 -2v3l-2 2H4z" fill="${c}"/><circle cx="11" cy="13.5" r="3.6" fill="none" stroke="${c}" stroke-width="1.3"/><path d="M7.5 13.5h7M11 10v7" stroke="${c}" stroke-width=".8"/><rect x="5" y="8.5" width="8" height="4" fill="${c}"/><rect x="8" y="4" width="1.5" height="4.5" fill="${bd}"/><path d="M20 12l2 0" stroke="${c}" stroke-width="1"/>`,
   skiff: c => `<path d="M3 15h16l-3 3H6z" fill="${c}"/><path d="M9 14V2L3 14zM12 14V5l5 9z" fill="${c}"/>`,
@@ -5209,6 +5284,9 @@ function adviceList() {
   if (buyable.length && mine.length < 14) add(2, `You have ${money(S.cash)}: enough for a ${buyable[0][1].name.toLowerCase()} (${money(buyable[0][1].price)}) and some to spare. A tug on a good route pays for herself in a few seasons.`, 'shipyard', 'The shipyard');
   if (y >= 1900 && towers.length && !towers.some(t => t.route.some(p => supplyRate(p, 'grain') > 0)))
     add(1, `Grain waits at the elevators (${listAnd(Object.keys(ELEVATORS).filter(p => supplyRate(p, 'grain') > 0).map(p => PORT[p].name))}) for the mills and towns round the bay. None of your routes calls at one.`);
+  if (tourSeason(S.day) && tourEra(y) && !mine.some(isPax) && PORTS.some(p => p.resort && portOpen(p.id)))
+    add(1, `Summer visitors are waiting at the railway towns for the resorts among the islands. An excursion steamer from the shipyard would carry them.`, 'shipyard', 'The shipyard');
+  for (const t of mine) if (isPax(t) && !busy(t) && t.route.length >= 2 && tourSeason(S.day) && !t.route.some(p => PORT[p].resort)) { add(2, `${t.name} has no resort on her route, and the visitors want to go out to the islands.`, 'adviceTug', 'Set her route', t.id); break; }
   if (S.loans > 0 && S.cash > S.loans + 15000) add(1, `You owe the bank ${money(S.loans)} at 6% and have ${money(S.cash)} in hand. Paying it off saves the interest.`, 'bank', 'The bank');
   for (const t of mine) if (ageOf(t) > 28 && !isWarp(t)) { add(1, `${t.name} is ${Math.floor(ageOf(t))} years old: she burns more and suffers more in a gale every year. Think about replacing her.`, 'adviceSee', 'See her', t.id); break; }
   return out.sort((a, b) => b.pri - a.pri);
@@ -5718,11 +5796,11 @@ function tugHTML(t) {
     orders = `<h3>Route</h3>
     ${t.route.length >= 2 ? `<ol class="stops">${t.route.map((p, i) => `<li class="${i === t.ri % t.route.length && S.season ? 'next' : ''}">${esc(PORT[p].name)}</li>`).join('')}</ol>` : '<p class="fine">No route yet.</p>'}
     <button class="btn" data-act="editRoute">${t.route.length >= 2 ? 'Change route' : 'Set a route'}</button>
-    <p class="fine">At each stop the captain delivers cargo that pays here and loads whatever pays best further along the route. ${m.hooker ? 'She carries logs as cargo, never in a boom.' : 'Logs go in a boom: three times the load, but slow.'}</p>`;
+    <p class="fine">At each stop the captain delivers cargo that pays here and loads whatever pays best further along the route. ${m.pax ? 'She carries summer visitors and package freight (supplies), nothing else, and takes no tows. Out of the summer she keeps only a skeleton crew.' : m.hooker ? 'She carries logs as cargo, never in a boom.' : 'Logs go in a boom: three times the load, but slow.'}</p>`;
   }
   if (!isFish(t) && t.harbour) orders = harbourHTML(t);
   else if (!isFish(t) && canHarbour(t) && harbourOpen() && S.season) orders += harbourOfferHTML(t);
-  const towing = isFish(t) ? '' : m.hooker ? `<h3>Aboard and in tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing aboard.'}</p>` : `<h3>In tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing in tow.'}</p>
+  const towing = isFish(t) ? '' : m.pax ? `<h3>Aboard</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'No one aboard.'}</p>` : m.hooker ? `<h3>Aboard and in tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing aboard.'}</p>` : `<h3>In tow</h3><p class="fine">${t.tow.length ? esc(towWords(t)) : 'Nothing in tow.'}</p>
     ${jobs.length ? `<h3>Tow wanted</h3><ul class="list">${jobs.map(j => `<li><button class="item" data-act="select" data-t="job" data-id="${j.id}">${jobGlyph(j)}<span><b>${esc(j.name)}</b><small>${esc(j.where)} → ${PORT[j.dest].name}</small></span><span class="side">${money(j.reward)}</span></button></li>`).join('')}</ul>` : ''}`;
   const sell = ui.confirmSell === t.id
     ? `<div class="confirm"><b>Sell ${esc(t.name)} for ${money(tugValue(t) * .8)}?</b><div class="row"><button class="btn danger wide" data-act="sellYes">Sell her</button><button class="btn wide" data-act="sellNo">Keep her</button></div></div>`
@@ -5841,7 +5919,7 @@ function portHTML(pid) {
     if (!s && !d && st < 1) continue;
     let want = '<span class="fine">–</span>';
     if (d > 0) { const [w, cls] = payWord(priceFactor(pid, c)); want = `<span class="pay ${cls}">${w}</span>`; }
-    rows.push(`<tr><td>${cargoDot(c)}${cargoName(c)}</td><td class="n">${s || st >= 1 ? Math.floor(st) : '–'}</td><td class="n">${want}</td></tr>`);
+    rows.push(`<tr><td>${cargoDot(c)}${cargoName(c)}</td><td class="n">${s || st >= 1 ? (c === 'visitors' ? Math.floor(st) * PAX_LOAD : Math.floor(st)) : '–'}</td><td class="n">${want}</td></tr>`);
   }
   const fm = fishMarket(pid);
   const builds = [];
@@ -5939,7 +6017,7 @@ function jobKm(t, j) {
 }
 function jobHTML(j) {
   if (!j) return null;
-  const tugs = S.tugs.filter(t => t.owner === 'p' && !isFish(t) && !isWarp(t) && !MODELS[t.model].hooker && !t.jobTow && S.season);
+  const tugs = S.tugs.filter(t => t.owner === 'p' && !isFish(t) && !isWarp(t) && !MODELS[t.model].hooker && !MODELS[t.model].pax && !t.jobTow && S.season);
   const racing = S.tugs.filter(t => t.job === j.id);
   const rival = racing.find(t => t.owner === 'r');
   return `${head(j.kind === 'salvage' ? 'Salvage' : 'Tow wanted', (j.kind === 'salvage' ? 'Steamer ' : 'Schooner ') + esc(j.name))}
@@ -6406,7 +6484,7 @@ const asApp = () => navigator.standalone === true || matchMedia('(display-mode: 
 const homeHint = () => !inClaude && !asApp() && matchMedia('(pointer: coarse)').matches
   ? '<p class="fine">To play full screen, like an app: tap the Share button at the top of Safari, then <b>Add to Home Screen</b>, and open the game from its new icon.</p>' : '';
 // The events that bring a new kind of boat to the yards, and the one that brings the compound refit: each makes the papers
-const EVENT_BOAT = { hooker: 'hooker', woodwrecker: 'woodwrecker', alligator: 'alligator', steamfish: 'steamfish', steel: 'steelcompound', wrecker: 'steelwrecker',
+const EVENT_BOAT = { tourists: 'excursion', hooker: 'hooker', woodwrecker: 'woodwrecker', alligator: 'alligator', steamfish: 'steamfish', steel: 'steelcompound', wrecker: 'steelwrecker',
   lifter: 'liftertug', gasfish: 'gasfish', dieselfish: 'dieselfish', dieseltug: 'diesel' };
 function newspaperHTML(e) {
   const model = EVENT_BOAT[e.id], m = model && MODELS[model], refit = e.id === 'refit', hw = e.id === 'harbourwork', gb = e.id === 'grainbarges';
@@ -6461,7 +6539,7 @@ function ledgerRows(L) {
   const rev = ledgerRevenue(L) + L.sales, cost = ledgerCost(L);
   return `<table class="ledger"><tbody>
     <tr class="head"><td colspan="2">Earnings</td></tr>
-    ${r(L.year >= 1912 ? 'Pulpwood' : 'Logs', L.logs)}${r('Lumber', L.lumber)}${r('Coal', L.coal)}${r('Supplies', L.supplies)}${r('Grain', L.grain)}${r('Fish', L.fish)}${r('Tows', L.tows)}${r('Harbour work', L.harbour)}${r('Salvage', L.salvage)}${r('Insurance claims', L.insurance)}${r('Dividends received', L.divIn)}${r('Boats and cargo sold', L.sales)}
+    ${r(L.year >= 1912 ? 'Pulpwood' : 'Logs', L.logs)}${r('Lumber', L.lumber)}${r('Coal', L.coal)}${r('Supplies', L.supplies)}${r('Grain', L.grain)}${r('Fares', L.visitors)}${r('Fish', L.fish)}${r('Tows', L.tows)}${r('Harbour work', L.harbour)}${r('Salvage', L.salvage)}${r('Insurance claims', L.insurance)}${r('Dividends received', L.divIn)}${r('Boats and cargo sold', L.sales)}
     <tr><td><b>Total earnings</b></td><td>${money(rev)}</td></tr>
     <tr class="head"><td colspan="2">Expenses</td></tr>
     ${r('Crews and coal', L.running)}${r('Repairs', L.repairs)}${r('Winter refit', L.refit)}${r('Insurance', L.premiums)}${r('Interest', L.interest)}${r('Fishing licences', L.licences)}${r('Fines', L.fines)}${r('Lost nets', L.nets)}${r('Ice', L.ice)}${r('Contract penalties', L.penalties)}${r('Dividends paid', L.divOut)}
@@ -6507,7 +6585,7 @@ function shipyardHTML(yard) {
   <div class="models">${models.map(([k, m]) => `<div class="model">${planThumb('boat', k, 'the ' + m.name)}<div><h4>${m.name}</h4><p>${m.blurb}</p></div>
     <button class="btn primary" data-act="buy" data-model="${k}" ${S.cash >= m.price && (!m.warp || warpRivers().length) ? '' : 'disabled'}>${money(m.price)}</button>
     ${m.warp ? `<label class="riverpick"><span class="fine">Ship her by rail to</span><select id="warpRiver">${warpRivers().map(id => `<option value="${id}">${esc(ucf(riverWhere(id)))}</option>`).join('')}</select></label>` : ''}
-    <div class="specs">${m.warp ? `<span>Brings down a boom of about <b>${WARP_LOGS}</b> loads of logs a week</span><span>Paid about <b>${money(WARP_FEE)}</b> a boom</span>` : m.hooker ? `<span>Carries <b>${m.power}</b> loads with her barges, <b>${m.power + (m.deckLoad || 0)}</b> of lumber</span><span>No log booms, tows or salvage</span>` : m.kind === 'tow' ? `<span>Tows <b>${m.power}</b> barges or a <b>${m.power * 3}</b>-load boom</span>${m.wreck ? '<span>Any salvage, and a quarter more for it</span>' : ''}` : `<span>Holds <b>${m.hold}</b> tons</span><span>Works <b>${m.net}</b> yards of net</span>`}<span>Speed <b>${m.kn}</b> knots${m.sail ? ' in a breeze' : ' light'}${m.raftKn ? `, <b>${m.raftKn}</b> with a raft` : ''}</span><span>Costs <b>${money(m.op)}</b> a day</span><span>${m.warp ? 'Works upriver, out of the gales' : m.risk <= .7 ? 'Very seaworthy' : m.risk <= 1 ? 'Seaworthy' : 'Tender in a sea'}</span></div>
+    <div class="specs">${m.warp ? `<span>Brings down a boom of about <b>${WARP_LOGS}</b> loads of logs a week</span><span>Paid about <b>${money(WARP_FEE)}</b> a boom</span>` : m.pax ? `<span>Carries about <b>${m.power * PAX_LOAD}</b> visitors, or <b>${m.power}</b> loads of supplies</span><span>Summers only: no other cargo, tows or salvage</span>` : m.hooker ? `<span>Carries <b>${m.power}</b> loads with her barges, <b>${m.power + (m.deckLoad || 0)}</b> of lumber</span><span>No log booms, tows or salvage</span>` : m.kind === 'tow' ? `<span>Tows <b>${m.power}</b> barges or a <b>${m.power * 3}</b>-load boom</span>${m.wreck ? '<span>Any salvage, and a quarter more for it</span>' : ''}` : `<span>Holds <b>${m.hold}</b> tons</span><span>Works <b>${m.net}</b> yards of net</span>`}<span>Speed <b>${m.kn}</b> knots${m.sail ? ' in a breeze' : ' light'}${m.raftKn ? `, <b>${m.raftKn}</b> with a raft` : ''}</span><span>Costs <b>${money(m.op)}</b> a day</span><span>${m.warp ? 'Works upriver, out of the gales' : m.risk <= .7 ? 'Very seaworthy' : m.risk <= 1 ? 'Seaworthy' : 'Tender in a sea'}</span></div>
     <p class="specline">${m.sail ? `${esc(m.spec.rig.split('.')[0])}` : `${esc(m.spec.engine.split(':')[0])}, ${m.spec.hp} at ${m.spec.rpm}`} · ${ftIn(m.spec.len)} long, draws ${ftIn(m.spec.draft)}</p>
     <details class="specsheet"><summary>${m.sail ? 'Rig and hull' : 'Engine and hull'}</summary>${specHTML(m)}</details></div>`).join('')}</div>
   ${soon.length ? `<p class="fine">Coming: ${soon.map(([, m]) => `${m.name} (${m.year})`).join(', ')}.</p>` : ''}
@@ -7815,7 +7893,7 @@ function hBoatsHere(pid) {
   const out = [];
   for (const t of S.tugs) if (t.at === pid && t.state !== 'sail') {
     const m = MODELS[t.model], sp = m.spec || {};
-    out.push({ key: t.id, sel: { t: 'tug', id: t.id }, L: (sp.len || 60) * FT, B: (sp.beam || 15) * FT, kind: m.sail ? 'skiff' : isFish(t) ? (t.model === 'steamfish' ? 'openfish' : 'fish') : m.warp ? 'alligator' : m.hooker ? 'steambarge' : m.wreck ? 'wrecker' : 'tug',
+    out.push({ key: t.id, sel: { t: 'tug', id: t.id }, L: (sp.len || 60) * FT, B: (sp.beam || 15) * FT, kind: m.sail ? 'skiff' : isFish(t) ? (t.model === 'steamfish' ? 'openfish' : 'fish') : m.warp ? 'alligator' : m.hooker ? 'steambarge' : m.pax ? 'passenger' : m.wreck ? 'wrecker' : 'tug',
       hull: t.owner === 'p' ? COL.player : (RIVAL[t.co] && RIVAL[t.co].color) || COL.rival, mine: t.owner === 'p', name: t.name, steam: !/diesel|gas/.test(t.model) && !m.sail, laid: t.state === 'laid',
       loaded: t.tow.length > 0, cargo: t.tow[0] && t.tow[0].c });
   }
