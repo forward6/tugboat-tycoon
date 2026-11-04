@@ -800,7 +800,7 @@ const EVENTS = [
 ];
 for (const e of EVENTS) e.day = dayOf(...e.date);
 
-const TITLES = [[0, 'Deckhand'], [25000, 'Wheelsman'], [75000, 'Captain'], [175000, 'Fleet Owner'], [375000, 'Commodore of the Bay'], [700000, 'Tugboat Tycoon'], [2000000, 'Legend of the Lakes']];
+const TITLES = [[0, 'Deckhand'], [25000, 'Wheelsman'], [75000, 'Captain'], [100000, 'Master Mariner'], [150000, 'Harbour Master'], [175000, 'Fleet Owner'], [375000, 'Commodore of the Bay'], [700000, 'Tugboat Tycoon'], [2000000, 'Legend of the Lakes']];
 const rankIdx = nw => TITLES.filter(t => nw >= t[0]).length - 1;
 const titleFor = nw => TITLES[rankIdx(nw)][1];
 
@@ -1145,7 +1145,7 @@ function newLedger(year) { return { year, logs: 0, lumber: 0, coal: 0, supplies:
 function newGame(seed) {
   S = { v: 1, seed: (seed || (Date.now() & 0x7fffffff)) | 0, day: dayOf(1870, 4, 20), year: 1870, season: true, seasonClose: dayOf(1870, 12, 6),
     cash: 9000, loans: 0, company: 'Georgian Bay Towing & Fish Co.', ports: {}, grounds: {}, tugs: [], jobs: [], news: [], fired: {}, effects: [],
-    nextId: 1, ledger: newLedger(1870), history: [], comps: {}, premiumMult: 1, premiumUntil: 0, rank: 0, over: false, seen: {}, mkt: newMarket() };
+    nextId: 1, ledger: newLedger(1870), history: [], comps: {}, premiumMult: 1, premiumUntil: 0, rank: 0, ranksV: 2, over: false, seen: {}, mkt: newMarket() };
   for (const p of PORTS) {
     const st = {}; for (const c of CARGO_IDS) { const r = supplyRate(p.id, c); if (r) st[c] = Math.round(r * 10 * 10) / 10; }
     S.ports[p.id] = { stock: st, glut: {}, millQ: 0, fishGlut: 0, built: {}, ice: 0 };
@@ -6784,7 +6784,10 @@ function migrate() {
   if (!S.gameId) S.gameId = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => (b % 36).toString(36)).join('');
   for (const p of PORTS) if (!S.ports[p.id]) S.ports[p.id] = { stock: {}, glut: {}, millQ: 0, fishGlut: 0, built: {}, ice: 0 };
   if (S.premiumUntil == null) S.premiumUntil = S.premiumMult > 1 ? 1884 : 0;
+  // Master Mariner and Harbour Master came in between Captain and Fleet Owner: move an older game's rank along with them
   if (S.rank == null) S.rank = rankIdx(netWorth());
+  else if (!S.ranksV) S.rank = [0, 1, 2, 5, 6, 7, 8][S.rank] ?? S.rank;
+  S.ranksV = 2;
   delete S.keepPlaying;
   if (!S.comps) { S.comps = {}; for (const c of RIVALS) if (coWindow(c, S.year)) comp(c.id).seen = 1; if (S.rival) comp('bay').earned = S.rival.earned || 0; delete S.rival; }
   for (const c of RIVALS) { const st = S.comps[c.id]; if (st && st.seen && st.in == null && coWindow(c, S.year)) { st.in = Math.floor(S.day); if (st.cash == null) st.cash = 2500; } }
