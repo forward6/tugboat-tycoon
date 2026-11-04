@@ -6,6 +6,8 @@
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const clip = (v, n) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, n);
 const num = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : null; };
+// how many of each kind of boat: a few dozen kinds at most, each a short lowercase name
+const cleanFleet = f => { if (!f || typeof f !== 'object') return null; const o = {}; for (const [k, v] of Object.entries(f).slice(0, 30)) { const n = num(v, 0, 999); if (/^[a-z]{3,20}$/.test(k) && n) o[k] = Math.round(n); } return Object.keys(o).length ? o : null; };
 
 export async function onRequestGet({ env }) {
   if (!env.PLAYS) return json({ error: 'not set up' }, 503);
@@ -31,7 +33,7 @@ export async function onRequestPost({ request, env }) {
   const game = clip(r.game, 40);
   Object.assign(p, {
     name: clip(r.name, 30) || p.name || '', game, company: clip(r.company, 60), year: num(r.year, 1870, 2100), month: clip(r.month, 12) || null, worth: num(r.worth, -1e9, 1e12),
-    title: clip(r.title, 40), boats: num(r.boats, 0, 999), device: clip(r.device, 20), app: !!r.app, last: now,
+    title: clip(r.title, 40), boats: num(r.boats, 0, 999), fleet: cleanFleet(r.fleet), device: clip(r.device, 20), app: !!r.app, last: now,
   });
   // the best game: the most any of the player's companies has been worth, and when it got there
   if (p.worth != null && (!p.best || p.worth > p.best.worth)) p.best = { worth: p.worth, company: p.company, year: p.year, month: p.month, title: p.title, game: game || null, at: now };

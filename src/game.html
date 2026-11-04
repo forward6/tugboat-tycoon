@@ -267,6 +267,10 @@ table.cargo td.n{text-align:right}
 .riverpick select{font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
 .item small.oncontract{color:var(--magenta);font-weight:700}
 .item .kline{display:block;margin-top:5px;max-width:260px}
+.fleetline{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;margin-top:4px}
+.fleetline span{display:inline-flex;align-items:center;gap:1px;font-size:12.5px;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.fleetline svg{width:22px;height:22px;display:block}
+.fleetline .fleetn{font-weight:400}
 .kv dd .ddsub{display:block;font-weight:400;font-size:12.5px;color:var(--ink-2)}
 .kvlink{all:unset;cursor:pointer;color:inherit;font:inherit;text-decoration:underline dotted;text-underline-offset:3px}
 .kvlink:focus-visible{outline:2px solid var(--magenta);outline-offset:2px}
@@ -6336,7 +6340,7 @@ function boardReport(start, leaving) {
   if (!BOARD.on || !S || navigator.onLine === false) return;
   const t = performance.now(), minutes = BOARD.mark ? Math.min(15, (t - BOARD.mark) / 60000) : 0; BOARD.mark = leaving ? 0 : t;
   const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, month: S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter', worth: Math.round(nw), title: titleFor(nw),
-    boats: S.tugs.filter(x => x.owner === 'p').length, device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
+    boats: S.tugs.filter(x => x.owner === 'p').length, fleet: S.tugs.filter(x => x.owner === 'p').reduce((a, t) => (a[t.model] = (a[t.model] || 0) + 1, a), {}), device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
   try {
     if (leaving && navigator.sendBeacon) navigator.sendBeacon('api/board', new Blob([body], { type: 'application/json' }));
     else fetch('api/board', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
@@ -6359,6 +6363,18 @@ async function openBoard() {
   let data = null; try { const r = await fetch('api/board', { cache: 'no-store' }); data = r.ok ? await r.json() : r.status === 503 ? { off: true } : null; } catch (e) { /* offline */ }
   if (ui.modalOpen && $('#modalBody h2') && /scoreboard/i.test($('#modalBody h2').textContent)) showModal(boardHTML(data));
 }
+// A player's fleet on the board: each kind of boat's little side view, and how many
+const SHORT_NAME = { woodsimple: ['small tug', 'small tugs'], woodrefit: ['refitted tug', 'refitted tugs'], woodcompound: ['rafting tug', 'rafting tugs'], steelcompound: ['steel tug', 'steel tugs'],
+  woodwrecker: ['wooden wrecker', 'wooden wreckers'], steelwrecker: ['steel wrecker', 'steel wreckers'], diesel: ['diesel tug', 'diesel tugs'], hooker: ['lumber hooker', 'lumber hookers'],
+  alligator: ['alligator', 'alligators'], skiff: ['skiff', 'skiffs'], steamfish: ['steam fish tug', 'steam fish tugs'], liftertug: ['enclosed fish tug', 'enclosed fish tugs'],
+  gasfish: ['gasoline fish tug', 'gasoline fish tugs'], dieselfish: ['diesel fish tug', 'diesel fish tugs'] };
+function fleetLine(p, you) {
+  const f = p.fleet && typeof p.fleet === 'object' ? Object.entries(p.fleet).filter(([m, n]) => GLYPHS[m] && n > 0) : [];
+  if (!f.length) return p.boats ? `<small>${p.boats} boat${p.boats === 1 ? '' : 's'}</small>` : '';
+  const order = Object.keys(MODELS); f.sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]));
+  const words = f.map(([m, n]) => `${n} ${SHORT_NAME[m][n === 1 ? 0 : 1]}`), col = you ? 'var(--player)' : 'var(--ink)', band = you ? 'var(--magenta)' : 'var(--ink)';
+  return `<span class="fleetline" role="img" aria-label="Fleet: ${esc(listAnd(words))}">${f.map(([m, n]) => `<span title="${esc(`${n} ${SHORT_NAME[m][n === 1 ? 0 : 1]}`)}"><svg viewBox="0 0 22 22" aria-hidden="true">${GLYPHS[m](col, band)}</svg>${n > 1 ? `×${n}` : ''}</span>`).join('')}<span class="fleetn">${f.reduce((a, [, n]) => a + n, 0)} boat${f.reduce((a, [, n]) => a + n, 0) === 1 ? '' : 's'}</span></span>`;
+}
 function boardHTML(data) {
   const head = `<div class="rules"><span>Tugboat Tycoon</span><span>Who's playing</span></div><h2>Scoreboard</h2>`, close = '<div class="row"><button class="btn primary wide" data-act="closeModal">Close</button></div>';
   if (!data) return `${head}<p class="desc">The scoreboard needs a connection. Try again when you're online.</p>${close}`;
@@ -6372,12 +6388,12 @@ function boardHTML(data) {
     const games = p.gamesPlayed || 1;
     return `<li><div class="item board${p.id === BOARD.id ? ' you' : ''}"><span class="rank">${i + 1}</span><span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">You</span>' : ''}</b>
     <small>Best: ${esc(b.company || '')} · ${esc(b.title || '')}${b.year ? ` · ${when(b.month, b.year)}` : ''}</small>
-    <small>${now}</small>
+    <small>${now}</small>${fleetLine(p, p.id === BOARD.id)}
     <small>Last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${p.app ? 'the' : /^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}${p.app ? ' home screen' : ''}` : ''} · ${playedText(p.minutes || 0)} in all · ${games} game${games === 1 ? '' : 's'}</small></span>
     <span class="side">${money(b.worth || 0)}<small>best</small></span></div></li>`;
   };
   return `${head}${ps.length ? `<ul class="list">${ps.map(row).join('')}</ul>` : '<p class="desc">No one has played yet.</p>'}
-  <p class="fine">Ranked by each player's best game: the most any of their companies has been worth. Starting a new game never lowers it. A game reports in when it starts and every few minutes while it's open.</p>
+  <p class="fine">Ranked by each player's best game: the most any of their companies has been worth. Starting a new game never lowers it. The little boats are the fleet in the game they're playing now. A game reports in when it starts and every few minutes while it's open.</p>
   ${boardNameHTML('board')}${close}`;
 }
 /* ---------- The bay's history, 1870 to today: real events on and around Georgian Bay, and what shaped it ----------
