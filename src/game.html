@@ -137,7 +137,7 @@ h3 .count{font-family:var(--font-ui);font-size:12px;color:var(--ink-2);font-weig
 .chip{font-size:12.5px;font-weight:700;border:1px solid var(--rule);border-radius:99px;padding:2px 9px;color:var(--ink-2);white-space:nowrap}
 .chip.mine{border-color:var(--magenta);color:var(--magenta)}
 .list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.item{width:100%;display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;
+.item{width:100%;display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;
   background:transparent;border:0;border-bottom:1px solid var(--rule);padding:9px 2px;cursor:pointer;min-height:48px}
 .item:hover{background:var(--surface-2)}
 .btn .btn-ic{width:18px;height:18px;margin-right:8px;vertical-align:-3px;flex-shrink:0}
@@ -2574,7 +2574,7 @@ function endSeason() {
   for (const c of RIVALS) { const st = S.comps[c.id]; if (st && (coActive(c, S.year) || st.earned)) { st.last = st.earned; st.hist.push([S.year, Math.round(st.earned), rivalTugs(c.id).length]); if (st.hist.length > 12) st.hist.shift(); } }
   rivalsGrow(S.year);
   addNews(`Navigation closes for ${S.year}. The fleet is laid up for the winter.`);
-  saveGame(true);
+  saveGame(true); cloudSave(true);
   const ri = rankIdx(netWorth());
   if (ri > (S.rank || 0)) { S.rank = ri; queueModal(() => rankHTML(ri)); }
   queueModal(winterHTML);
@@ -2701,6 +2701,8 @@ function assignGround(t, gid) {
 const SAVE_KEY = 'tugboat-tycoon-save-v1', GAMES_KEY = 'tugboat-tycoon-games-v1', GAMES_MAX = 5;
 let inPlay = false, lastSaveMonth = null;
 function loadGames() { try { const o = JSON.parse(localStorage.getItem(GAMES_KEY) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+const GAME_GLYPH = () => `<svg class="glyph" viewBox="0 0 22 22" aria-hidden="true">${GLYPHS.woodsimple('var(--player)', 'var(--magenta)')}</svg>`;
+const PERSON_GLYPH = '<svg class="glyph" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="7" r="3.6" fill="var(--ink)"/><path d="M4 19.5c0-4.2 3.1-6.8 7-6.8s7 2.6 7 6.8z" fill="var(--ink)"/></svg>';
 const gameWhen = s => `${s.season ? MONTHS[dateOf(s.day).getUTCMonth()] : 'Winter'} ${s.year}`;
 function saveGame(quiet) {
   if (!S || !inPlay) return false;
@@ -2712,8 +2714,20 @@ function saveGame(quiet) {
       for (const id of Object.keys(g).sort((a, b) => g[b].at - g[a].at).slice(GAMES_MAX)) delete g[id];
       localStorage.setItem(GAMES_KEY, JSON.stringify(g));
     } catch (e) { /* no room for the shelf: the game itself is saved */ }
+    cloudSave(!quiet);
     if (!quiet) toast('Game saved in this browser.'); return true;
   } catch (e) { if (!quiet) toast('Could not save in this browser.', true); return false; }
+}
+// A copy online too, under your scoreboard id: at most every five minutes of play, and straight away at the end of a
+// season, from Menu, Save game, and when the game is put away; only when the game has moved on since the last copy
+const CLOUD = { last: 0, sig: '' };
+function cloudSave(force, leaving) {
+  if (!BOARD.on || !inPlay || !S || navigator.onLine === false) return;
+  const now = Date.now(), sig = S.gameId + ':' + Math.floor(S.day) + ':' + Math.round(S.cash);
+  if (sig === CLOUD.sig || (!force && now - CLOUD.last < 5 * 60000) || (leaving && now - CLOUD.last < 45000)) return;
+  const body = JSON.stringify({ id: BOARD.id, game: S.gameId, when: gameWhen(S), year: S.year, company: S.company, worth: Math.round(netWorth()), data: JSON.stringify(S) });
+  CLOUD.last = now; CLOUD.sig = sig;
+  try { fetch('api/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: body.length < 60000 }).then(r => { if (!r.ok) CLOUD.sig = ''; }, () => { CLOUD.sig = ''; }); } catch (e) { CLOUD.sig = ''; }
 }
 // From here on the game in play is saved; the browser is asked to keep this site's storage
 function beginPlay() {
@@ -2736,10 +2750,54 @@ function savedGamesHTML(from) {
   return `<div class="rules"><span>Tugboat Tycoon</span><span>Saved in this browser</span></div>
   <h2>Saved games</h2>
   ${ids.length ? `<ul class="list">${ids.map(id => { const e = g[id];
-    return `<li><button class="item" data-act="loadSlot" data-id="${esc(id)}" ${id === cur ? 'disabled' : ''}><span><b>${esc(e.company || 'A company')}</b><small>${esc(e.when || String(e.year))}${e.worth != null ? ` · worth ${money(e.worth)}` : ''} · saved ${ago(e.at)}</small></span><span class="side">${id === cur ? 'Playing now' : 'Play'}</span></button></li>`; }).join('')}</ul>`
+    return `<li><button class="item" data-act="loadSlot" data-id="${esc(id)}" ${id === cur ? 'disabled' : ''}>${GAME_GLYPH()}<span><b>${esc(e.company || 'A company')}</b><small>${esc(e.when || String(e.year))}${e.worth != null ? ` · worth ${money(e.worth)}` : ''} · saved ${ago(e.at)}</small></span><span class="side">${id === cur ? 'Playing now' : 'Play'}</span></button></li>`; }).join('')}</ul>`
     : '<p class="desc">No saved games yet.</p>'}
-  <p class="fine">The last ${GAMES_MAX} games played in this browser are kept here, each where you last left it. The game also saves itself every month, at the end of each season and when you put it away. A game played on a home-screen icon is saved apart from one played in Safari: to move one across, use Menu, Another device, Send this game.</p>
+  <p class="fine">The last ${GAMES_MAX} games played in this browser are kept here, each where you last left it. The game saves itself every month, at the end of each season and when you put it away.</p>
+  ${BOARD.on ? `<h3>Saved online</h3>
+  <div id="cloudList"><p class="fine">Looking for your games online…</p></div>
+  <div class="row"><button class="btn wide" data-act="cloudFind" data-from="${from}">Find my game by my scoreboard name</button></div>
+  <p class="fine">Your last three games are also saved online, under your name on the scoreboard, every few minutes while you play. If this iPad has forgotten your game, or you're on another device, find your name and bring it back.</p>` : ''}
   <div class="row"><button class="btn wide ghost" data-act="${from === 'title' ? 'titleBack' : 'menu'}">Back</button></div>`;
+}
+// The games saved online under a player's id
+async function cloudGames(id) {
+  try { const r = await fetch('api/save?id=' + encodeURIComponent(id), { cache: 'no-store' }); if (!r.ok) return r.status === 503 ? { off: true } : null; return await r.json(); } catch (e) { return null; }
+}
+const cloudRows = (games, pid, name) => games.map(g => `<li><button class="item" data-act="cloudLoad" data-pid="${esc(pid)}" data-game="${esc(g.game)}" data-name="${esc(name || '')}" ${inPlay && S && S.gameId === g.game && pid === BOARD.id ? 'disabled' : ''}>${GAME_GLYPH()}<span><b>${esc(g.company || 'A company')}</b><small>${esc(g.when || String(g.year))}${g.worth != null ? ` · worth ${money(g.worth)}` : ''} · saved ${boardAgo(Date.now() - g.at)}</small></span><span class="side">${inPlay && S && S.gameId === g.game && pid === BOARD.id ? 'Playing now' : 'Play'}</span></button></li>`).join('');
+async function fillCloudList() {
+  const data = await cloudGames(BOARD.id), el = $('#cloudList'); if (!el) return;
+  el.innerHTML = !data ? '<p class="fine">Online saves need a connection.</p>' : data.off ? '<p class="fine">Online saving isn\'t switched on.</p>'
+    : data.games.length ? `<ul class="list">${cloudRows(data.games, BOARD.id, BOARD.name)}</ul>` : `<p class="fine">Nothing saved online yet as ${esc(BOARD.name)}.</p>`;
+}
+// Finding your game by your name on the scoreboard
+async function cloudFind(from) {
+  showModal(`<h2>Find my game</h2><p class="fine">Fetching the scoreboard…</p>`);
+  let data = null; try { const r = await fetch('api/board', { cache: 'no-store' }); data = r.ok ? await r.json() : null; } catch (e) { /* offline */ }
+  if (!ui.modalOpen || !/Find my game/.test(($('#modalBody h2') || {}).textContent || '')) return;
+  const ps = (data && data.players || []).slice().sort((a, b) => (b.last || 0) - (a.last || 0));
+  showModal(`<div class="rules"><span>Tugboat Tycoon</span><span>Saved online</span></div>
+  <h2>Find my game</h2>
+  ${!data ? '<p class="desc">This needs a connection. Try again when you\'re online.</p>' : ps.length ? `<p class="desc">Which one is you?</p><ul class="list">${ps.map(p => `<li><button class="item" data-act="cloudWho" data-pid="${esc(p.id)}" data-name="${esc(p.name || '')}" data-from="${from}">${PERSON_GLYPH}<span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">This device</span>' : ''}</b><small>${esc(p.company || '')}${p.year ? `, ${p.month ? esc(p.month) + ' ' : ''}${p.year}` : ''} · last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${/^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}` : ''}</small></span><span class="side">›</span></button></li>`).join('')}</ul>` : '<p class="desc">No one is on the scoreboard yet.</p>'}
+  <div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="${from}">Back</button></div>`);
+}
+async function cloudWho(pid, name, from) {
+  showModal(`<h2>${esc(name || 'Your')} games</h2><p class="fine">Looking…</p>`);
+  const data = await cloudGames(pid);
+  if (!ui.modalOpen) return;
+  const me = pid === BOARD.id;
+  showModal(`<div class="rules"><span>Saved online</span><span>${esc(name || '')}</span></div>
+  <h2>${esc(name || 'Their')}'s games</h2>
+  ${!data ? '<p class="desc">This needs a connection. Try again when you\'re online.</p>' : data.games && data.games.length ? `<ul class="list">${cloudRows(data.games, pid, name)}</ul>
+  ${me ? '' : `<p class="fine">Playing one of these makes this device ${esc(name)} on the scoreboard, as it was where the game was played. Only bring back your own games.</p>`}` : `<p class="desc">${esc(name || 'They')} has no games saved online yet. Games are saved online from now on, while they play.</p>`}
+  <div class="row"><button class="btn wide ghost" data-act="cloudFind" data-from="${from}">Back</button></div>`);
+}
+async function cloudLoad(pid, game, name) {
+  const data = await cloudGames(pid), g = data && data.games && data.games.find(x => x.game === game);
+  let s = null; try { s = g && JSON.parse(g.data); } catch (e) { /* unreadable */ }
+  if (!s || s.v !== 1) { toast('That game could not be brought back.', true); return; }
+  if (inPlay) saveGame(true);
+  if (pid !== BOARD.id) { BOARD.id = pid; if (name) BOARD.name = name; BOARD.named = true; boardSave(); }
+  S = s; afterLoad(); ui.queue = []; closeModal(); beginPlay(); boardNow(); toast(`Back to ${S.company}, ${gameWhen(S)}.`);
 }
 /* ---------- Moving a game between devices: a small file, sent any way the device can send a file ---------- */
 const saveName = () => `tugboat-tycoon-${S.company.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'game'}-${S.year}.json`;
@@ -6122,7 +6180,8 @@ function titleHTML(saved) {
   </ol>
   <p class="fine">Pinch, scroll or double-tap to zoom in, drag to move around, and tap anything on the map. The corner button brings back the whole bay. The years roll on for as long as you like to play.</p>
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="titleNew">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
-  ${savedCount() > 1 || (!saved && savedCount()) ? `<div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="title">Saved games (${savedCount()})</button></div>` : ''}
+  ${!saved && BOARD.on ? '<div class="row"><button class="btn wide" data-act="savedGames" data-from="title">Bring back a saved game</button></div>'
+    : savedCount() > 1 || BOARD.on ? `<div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="title">Saved games${savedCount() ? ` (${savedCount()})` : ''}</button></div>` : ''}
   ${playNotice()}${homeHint()}
   ${BOARD.on ? '<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button></div>' : ''}`;
 }
@@ -6592,7 +6651,10 @@ const ACTS = {
   continue: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); } closeModal(); beginPlay(); boardStart(); },
   save: () => { saveGame(false); closeModal(); },
   load: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); beginPlay(); boardNow(); toast(`Loaded your ${S.year} game.`); } closeModal(); },
-  savedGames: el => showModal(savedGamesHTML(el.dataset.from)),
+  savedGames: el => { showModal(savedGamesHTML(el.dataset.from)); if (BOARD.on) fillCloudList(); },
+  cloudFind: el => cloudFind(el.dataset.from),
+  cloudWho: el => cloudWho(el.dataset.pid, el.dataset.name, el.dataset.from),
+  cloudLoad: el => { el.disabled = true; cloudLoad(el.dataset.pid, el.dataset.game, el.dataset.name); },
   titleBack: () => showModal(titleHTML(loadSaved())),
   titleNew: () => { const s = loadSaved(); showModal(`<h2>Start a new game?</h2><p class="desc">${s ? `Your ${esc(s.company)} game (${s.year}) stays saved. You can go back to it any time from Saved games, on this screen or in the menu.` : ''}</p>
     <div class="row"><button class="btn primary wide" data-act="newGameYes">Start a new game in 1870</button><button class="btn wide" data-act="titleBack">Back</button></div>`); },
@@ -7715,8 +7777,8 @@ function start(data) {
   if (window.ResizeObserver) new ResizeObserver(() => resize()).observe($('#mapArea'));
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', retheme);
   new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(true); });
-  window.addEventListener('pagehide', () => saveGame(true));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { saveGame(true); cloudSave(true, true); } });
+  window.addEventListener('pagehide', () => { saveGame(true); cloudSave(true, true); });
   window.claude?.hot?.snapshot?.(() => ({ S }));
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
