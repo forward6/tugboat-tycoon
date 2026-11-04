@@ -2449,6 +2449,7 @@ function simAdvance(days) {
 }
 function dailyTick() {
   const day = Math.floor(S.day);
+  if (inPlay && S.season && monthOf(day) !== lastSaveMonth) { lastSaveMonth = monthOf(day); saveGame(true); }
   advanceWeather();
   checkEvents();
   // ports
@@ -2692,8 +2693,54 @@ function assignGround(t, gid) {
 /* =====================================================================
    Saving
    ===================================================================== */
-const SAVE_KEY = 'tugboat-tycoon-save-v1';
-function saveGame(quiet) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); if (!quiet) toast('Game saved in this browser.'); return true; } catch (e) { if (!quiet) toast('Could not save in this browser.', true); return false; } }
+/* ---------- Saving ----------
+   The game in play is saved in this browser: at each new month, at the end of the season, when the game is put away or
+   the app closed, and from the menu. Nothing is saved until a game is under way, so the fresh game behind the title
+   screen can never overwrite the one you are about to continue. The last few games (one entry each) are also kept on a
+   shelf, so starting a new game never loses the old one: Saved games, on the title screen and in the menu. */
+const SAVE_KEY = 'tugboat-tycoon-save-v1', GAMES_KEY = 'tugboat-tycoon-games-v1', GAMES_MAX = 5;
+let inPlay = false, lastSaveMonth = null;
+function loadGames() { try { const o = JSON.parse(localStorage.getItem(GAMES_KEY) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
+const gameWhen = s => `${s.season ? MONTHS[dateOf(s.day).getUTCMonth()] : 'Winter'} ${s.year}`;
+function saveGame(quiet) {
+  if (!S || !inPlay) return false;
+  try {
+    const json = JSON.stringify(S);
+    localStorage.setItem(SAVE_KEY, json);
+    try {
+      const g = loadGames(); g[S.gameId] = { at: Date.now(), when: gameWhen(S), year: S.year, company: S.company, worth: Math.round(netWorth()), S: json };
+      for (const id of Object.keys(g).sort((a, b) => g[b].at - g[a].at).slice(GAMES_MAX)) delete g[id];
+      localStorage.setItem(GAMES_KEY, JSON.stringify(g));
+    } catch (e) { /* no room for the shelf: the game itself is saved */ }
+    if (!quiet) toast('Game saved in this browser.'); return true;
+  } catch (e) { if (!quiet) toast('Could not save in this browser.', true); return false; }
+}
+// From here on the game in play is saved; the browser is asked to keep this site's storage
+function beginPlay() {
+  inPlay = true; lastSaveMonth = S && S.season ? monthOf(S.day) : null; saveGame(true);
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* not offered here */ }
+}
+// A save from before the shelf: put it on the shelf, with an id, so a new game can't push it out
+(function shelveOldSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY); if (!raw) return; const s0 = JSON.parse(raw); if (!s0 || s0.v !== 1) return;
+    if (!s0.gameId) { s0.gameId = 'g' + Date.now().toString(36); localStorage.setItem(SAVE_KEY, JSON.stringify(s0)); }
+    const g = loadGames(); if (g[s0.gameId]) return;
+    g[s0.gameId] = { at: Date.now(), when: `${s0.year}`, year: s0.year, company: s0.company, worth: null, S: JSON.stringify(s0) };
+    localStorage.setItem(GAMES_KEY, JSON.stringify(g));
+  } catch (e) { /* storage blocked */ }
+})();
+function savedGamesHTML(from) {
+  const g = loadGames(), ids = Object.keys(g).sort((a, b) => g[b].at - g[a].at), cur = inPlay && S ? S.gameId : null;
+  const ago = ms => boardAgo(Date.now() - ms);
+  return `<div class="rules"><span>Tugboat Tycoon</span><span>Saved in this browser</span></div>
+  <h2>Saved games</h2>
+  ${ids.length ? `<ul class="list">${ids.map(id => { const e = g[id];
+    return `<li><button class="item" data-act="loadSlot" data-id="${esc(id)}" ${id === cur ? 'disabled' : ''}><span><b>${esc(e.company || 'A company')}</b><small>${esc(e.when || String(e.year))}${e.worth != null ? ` · worth ${money(e.worth)}` : ''} · saved ${ago(e.at)}</small></span><span class="side">${id === cur ? 'Playing now' : 'Play'}</span></button></li>`; }).join('')}</ul>`
+    : '<p class="desc">No saved games yet.</p>'}
+  <p class="fine">The last ${GAMES_MAX} games played in this browser are kept here, each where you last left it. The game also saves itself every month, at the end of each season and when you put it away. A game played on a home-screen icon is saved apart from one played in Safari: to move one across, use Menu, Another device, Send this game.</p>
+  <div class="row"><button class="btn wide ghost" data-act="${from === 'title' ? 'titleBack' : 'menu'}">Back</button></div>`;
+}
 /* ---------- Moving a game between devices: a small file, sent any way the device can send a file ---------- */
 const saveName = () => `tugboat-tycoon-${S.company.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'game'}-${S.year}.json`;
 async function sendGame() {
@@ -2730,6 +2777,7 @@ function pickGameFile() {
   inp.click();
 }
 function loadSaved() { try { const s = localStorage.getItem(SAVE_KEY); if (!s) return null; const o = JSON.parse(s); return o && o.v === 1 ? o : null; } catch (e) { return null; } }
+const savedCount = () => Object.keys(loadGames()).length;
 
 /* =====================================================================
    Rendering: the map
@@ -6073,7 +6121,8 @@ function titleHTML(saved) {
     <li><b>Race for tows.</b> Wind-bound schooners and wrecks pay well. The first tug alongside gets the job, so beat the other companies' tugs to them.</li>
   </ol>
   <p class="fine">Pinch, scroll or double-tap to zoom in, drag to move around, and tap anything on the map. The corner button brings back the whole bay. The years roll on for as long as you like to play.</p>
-  <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="newGameYes">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
+  <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="titleNew">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
+  ${savedCount() > 1 || (!saved && savedCount()) ? `<div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="title">Saved games (${savedCount()})</button></div>` : ''}
   ${playNotice()}${homeHint()}
   ${BOARD.on ? '<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button></div>' : ''}`;
 }
@@ -6386,7 +6435,7 @@ function openHistory(fromMenu) {
 function menuHTML() {
   const saved = loadSaved();
   return `<h2>Menu</h2>
-  <div class="row"><button class="btn wide" data-act="save">Save game</button><button class="btn wide" data-act="load" ${saved ? '' : 'disabled'}>Load saved game${saved ? ' (' + saved.year + ')' : ''}</button></div>
+  <div class="row"><button class="btn wide" data-act="save">Save game</button><button class="btn wide" data-act="savedGames" data-from="menu">Saved games${savedCount() ? ` (${savedCount()})` : ''}</button></div>
   ${canFull() ? `<div class="row"><button class="btn wide" data-act="fullScreen">${isFull() ? 'Leave full screen' : 'Play full screen'}</button></div>` : ''}
   <h3>Share</h3>
   <div class="row"><button class="btn wide" data-act="share">${SHARE_ICON}Share how you're doing</button>${BOARD.on ? '<button class="btn wide" data-act="board">Scoreboard</button>' : ''}</div>
@@ -6394,7 +6443,7 @@ function menuHTML() {
   <h3>Another device</h3>
   <div class="row"><button class="btn wide" data-act="sendGame">Send this game</button><button class="btn wide" data-act="loadGameFile">Load a game from a file</button></div>
   <p class="fine">Your game is kept on this device only. To carry on somewhere else, send it (by Mail, Messages, AirDrop or anything that sends a file), then open the game there and load the file.</p>
-  ${ui.confirmNew ? `<div class="confirm"><b>Start over in 1870? This game will be lost unless you saved it.</b><div class="row"><button class="btn danger wide" data-act="newGameYes">Start over</button><button class="btn wide" data-act="newGameNo">Keep playing</button></div></div>` : '<button class="btn" data-act="newGame">New game</button>'}
+  ${ui.confirmNew ? `<div class="confirm"><b>Start a new game in 1870? This one stays in Saved games, where you left it.</b><div class="row"><button class="btn danger wide" data-act="newGameYes">Start over</button><button class="btn wide" data-act="newGameNo">Keep playing</button></div></div>` : '<button class="btn" data-act="newGame">New game</button>'}
   ${playLog.owner && playLog.db ? '<div class="row"><button class="btn wide" data-act="players">Who\'s been playing</button></div>' : ''}
   ${soundMenuHTML()}
   ${gfxMenuHTML()}
@@ -6426,7 +6475,7 @@ const ACTS = {
   share: () => shareCompany(),
   sendGame: () => sendGame(),
   loadGameFile: () => pickGameFile(),
-  loadGameYes: () => { if (!pendingGame) return; S = pendingGame; pendingGame = null; afterLoad(); saveGame(true); ui.queue = []; closeModal(); boardNow(); toast(`Loaded ${S.company}, ${S.year}.`); },
+  loadGameYes: () => { if (!pendingGame) return; if (inPlay) saveGame(true); S = pendingGame; pendingGame = null; afterLoad(); beginPlay(); ui.queue = []; closeModal(); boardNow(); toast(`Loaded ${S.company}, ${S.year}.`); },
   shareCopy: () => shareCopy(),
   shareSave: () => shareSave(),
   shareSheet: () => shareSheet(),
@@ -6535,17 +6584,27 @@ const ACTS = {
   sellYes: () => { const t = tugSel(); if (t) sellTug(t); },
   build: el => { if (ui.sel && ui.sel.t === 'port') build(el.dataset.what, ui.sel.id); },
   closeModal: () => closeModal(),
-  play: () => { closeModal(); saveGame(true); boardStart(); if (!tourSeen()) startTour(); },
+  play: () => { closeModal(); beginPlay(); boardStart(); if (!tourSeen()) startTour(); },
   tour: () => startTour(),
   tourNext: () => { if (!tour) return; if (TOUR[tour.i].last) endTour(true); else tourShow(tour.i + 1); },
   tourBack: () => { if (tour) tourShow(tour.i - 1); },
   tourSkip: () => endTour(true),
-  continue: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); } closeModal(); boardStart(); },
+  continue: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); } closeModal(); beginPlay(); boardStart(); },
   save: () => { saveGame(false); closeModal(); },
-  load: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); boardNow(); toast(`Loaded your ${S.year} game.`); } closeModal(); },
+  load: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); beginPlay(); boardNow(); toast(`Loaded your ${S.year} game.`); } closeModal(); },
+  savedGames: el => showModal(savedGamesHTML(el.dataset.from)),
+  titleBack: () => showModal(titleHTML(loadSaved())),
+  titleNew: () => { const s = loadSaved(); showModal(`<h2>Start a new game?</h2><p class="desc">${s ? `Your ${esc(s.company)} game (${s.year}) stays saved. You can go back to it any time from Saved games, on this screen or in the menu.` : ''}</p>
+    <div class="row"><button class="btn primary wide" data-act="newGameYes">Start a new game in 1870</button><button class="btn wide" data-act="titleBack">Back</button></div>`); },
+  loadSlot: el => {
+    const e = loadGames()[el.dataset.id]; let s = null; try { s = e && JSON.parse(e.S); } catch (x) { /* unreadable */ }
+    if (!s || s.v !== 1) { toast('That game could not be read.', true); return; }
+    if (inPlay) saveGame(true);
+    S = s; afterLoad(); ui.queue = []; closeModal(); beginPlay(); boardNow(); toast(`Back to ${S.company}, ${gameWhen(S)}.`);
+  },
   newGame: () => { ui.confirmNew = true; showModal(menuHTML()); },
   newGameNo: () => { ui.confirmNew = false; showModal(menuHTML()); },
-  newGameYes: () => { ui.queue = []; newGame(); afterLoad(); closeModal(); boardNow(); if (!tourSeen()) startTour(); },
+  newGameYes: () => { if (inPlay) saveGame(true); ui.queue = []; newGame(); afterLoad(); closeModal(); beginPlay(); boardNow(); if (!tourSeen()) startTour(); },
   startSeason: () => { closeModal(); startSeason(); saveGame(true); },
   newsAll: () => { select(null); $('#panel').classList.remove('collapsed'); },
 };
@@ -7649,14 +7708,15 @@ function retheme() { readColors(); tileCache.clear(); renderBase(); }
 function start(data) {
   readColors(); buildNav(); initNodes(); buildMapPaths(); buildIslets(); gfxInit(); loadRelief(); loadDepth();
   resize(); renderBase();
-  if (data && data.S && data.S.v === 1) { S = data.S; afterLoad(); }
+  if (data && data.S && data.S.v === 1) { S = data.S; afterLoad(); inPlay = true; }
   else { newGame(); afterLoad(); showModal(titleHTML(loadSaved())); }
   syncSpeed(); syncSoundBtn();
   window.addEventListener('resize', () => { resize(); });
   if (window.ResizeObserver) new ResizeObserver(() => resize()).observe($('#mapArea'));
   matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', retheme);
   new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  document.addEventListener('visibilitychange', () => { if (document.hidden && S) saveGame(true); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) saveGame(true); });
+  window.addEventListener('pagehide', () => saveGame(true));
   window.claude?.hot?.snapshot?.(() => ({ S }));
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
