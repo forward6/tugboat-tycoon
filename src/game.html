@@ -17,7 +17,7 @@
   --surface:#fbf7ec; --surface-2:#efe6cf; --magenta:#a3306a; --on-magenta:#ffffff;
   --player:#1c2731; --rival:#9c4126; --good:#35704a; --warn:#9d7015; --bad:#ab352d; --money:#2c6a3c;
   --shadow:rgba(28,39,49,.22); --scrim:rgba(28,39,49,.45);
-  --c-logs:#8b5a2b; --c-lumber:#b98a36; --c-coal:#3d4248; --c-supplies:#3f6f9a; --c-fish:#3f8282;
+  --c-logs:#8b5a2b; --c-lumber:#b98a36; --c-coal:#3d4248; --c-supplies:#3f6f9a; --c-fish:#3f8282; --c-grain:#9a8a1f;
   --h1:#3a6ea5; --h2:#c0582c; --h3:#2a8a6a; --h4:#b8860b; --h5:#8e4f8f; --hx:#a59f8c;
   --font-display:"IM Fell English SC","Iowan Old Style","Palatino Linotype",Georgia,serif;
   --font-chart:"IM Fell English","Iowan Old Style","Palatino Linotype",Georgia,serif;
@@ -32,7 +32,7 @@
     --surface:#151c21; --surface-2:#1d272d; --magenta:#e56aa3; --on-magenta:#1b0e15;
     --player:#eef3f1; --rival:#ec8f66; --good:#83c592; --warn:#e5b961; --bad:#f2827a; --money:#93d6a3;
     --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.58);
-    --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
+    --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --c-grain:#d6c766; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
     color-scheme:dark;
   }
 }
@@ -42,7 +42,7 @@
   --surface:#151c21; --surface-2:#1d272d; --magenta:#e56aa3; --on-magenta:#1b0e15;
   --player:#eef3f1; --rival:#ec8f66; --good:#83c592; --warn:#e5b961; --bad:#f2827a; --money:#93d6a3;
   --shadow:rgba(0,0,0,.5); --scrim:rgba(0,0,0,.58);
-  --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
+  --c-logs:#c88f56; --c-lumber:#dfbd73; --c-coal:#aab2ba; --c-supplies:#84b4df; --c-fish:#7fc6c6; --c-grain:#d6c766; --h1:#5b92cc; --h2:#d9703f; --h3:#3aa883; --h4:#b88a1e; --h5:#b277b3; --hx:#6c7479;
   color-scheme:dark;
 }
 [hidden]{display:none!important}
@@ -463,6 +463,7 @@ const CARGO = {
   lumber:   { name: 'Lumber',   rate: 32 },
   coal:     { name: 'Coal',     rate: 30 },
   supplies: { name: 'Supplies', rate: 44 },
+  grain:    { name: 'Grain',    rate: 34 },
 };
 const CARGO_IDS = Object.keys(CARGO);
 
@@ -741,6 +742,7 @@ const EVENTS = [
     effect: ['Logs no longer sell at Bay City.', 'Ontario sawmills want half again as many logs.'] },
   { id: 'century', date: [1900, 4, 1], head: 'A new century on the bay',
     body: 'Navigation opens on the first season of the twentieth century. Up the rivers, the big pine is thinning out.' },
+  { id: 'grainbarges', date: [1900, 5, 15], head: 'Grain for the barges', body: 'The elevators at Midland, Depot Harbour, Owen Sound and Collingwood fill every season with western grain from the big lake ships. The flour mills at Owen Sound and Meaford, the feed merchants in the towns and the camps up the north shore will take it by the barge-load.', effect: ['Grain is now a cargo for your towing tugs: load it at a port with a working elevator and deliver it to the mills and towns that want it.', 'More comes down the lakes each year as the prairies fill. Port McNicoll\'s elevator joins them when it opens.'] },
   { id: 'wrecker', date: [1902, 4, 1], head: 'Big steel wrecking tugs',
     body: 'The yards are building big steel tugs with triple-expansion engines for rafting and salvage work.', effect: ['New tug for sale: Steel wrecking tug, triple expansion.'] },
   { id: 'lifter', date: [1903, 4, 1], head: 'Decked-over fish tugs',
@@ -1078,6 +1080,7 @@ function effectMult(pid, c, kind) {
 const tradeGrowth = day => 1 + .02 * clamp((day - dayOf(1870, 1, 1)) / 365, 0, 60);
 function demandRate(pid, c, day = S.day) {
   if (!portOpen(pid, day)) return 0;
+  if (c === 'grain') return day < GRAIN_FROM ? 0 : (GRAIN_DEMAND[pid] || 0) * tradeGrowth(day) * effectMult(pid, c, 'demand');
   let r = baseRate(PORT[pid], 'demand', c, day) * tradeGrowth(day); if (!r) return 0;
   if (pid === 'baycity' && c === 'logs') r = day < D.michigan ? 0 : day < D.rafts ? .5 : day < D.mfg ? 1.5 : day < D.pulp ? 0 : .35; // pulpwood for the Saginaw Valley paper mills
   if (pid === 'gateway') {
@@ -1095,6 +1098,7 @@ function demandRate(pid, c, day = S.day) {
 }
 function supplyRate(pid, c, day = S.day) {
   if (!portOpen(pid, day)) return 0;
+  if (c === 'grain') return grainSupply(pid, day) * effectMult(pid, c, 'supply');
   let r = baseRate(PORT[pid], 'supply', c, day) * tradeGrowth(day); if (!r) return 0;
   if (pid === 'owensound' && c === 'supplies' && day >= D.cpr && day < D.mcnicoll) r *= 1.6;
   if (pid === 'midland' && c === 'lumber' && day >= D.railMid) r *= 2.5;
@@ -1667,7 +1671,7 @@ function checkEvents() {
     if (e.id === 'asia') { if (S.season) S.weather.today = { k: 'gale', dir: 'NW' }; S.premiumMult = 1.5; S.premiumUntil = 1884; }
     if (e.id === 'storm1913') { S.premiumMult = 1.5; S.premiumUntil = 1914; }
     addNews(e.head + '. ' + e.body);
-    if (e.major || EVENT_BOAT[e.id] || e.id === 'refit' || e.id === 'harbourwork') queueModal(() => newspaperHTML(e));
+    if (e.major || EVENT_BOAT[e.id] || e.id === 'refit' || e.id === 'harbourwork' || e.id === 'grainbarges') queueModal(() => newspaperHTML(e));
     else toast(e.head);
   }
 }
@@ -2030,6 +2034,7 @@ function contractCustomer(c, to, y) {
   if (c === 'logs') return to === 'waubaushene' && y < 1926 ? 'the Georgian Bay Lumber Co.' : to === 'baycity' ? 'the Saginaw River mills' : `the sawmills at ${name}`;
   if (c === 'coal') { const r = railOwnerAt(to, y); return r ? `the ${r}, for its engines at ${name}` : `the coal dealers at ${name}`; }
   if (c === 'lumber') return `the lumber dealers at ${name}`;
+  if (c === 'grain') return GRAIN_MILLS.has(to) ? `the flour mills at ${name}` : baseRate(PORT[to], 'supply', 'logs', S.day) ? `the lumber camps at ${name}, for their horses` : `the feed merchants at ${name}`;
   return baseRate(PORT[to], 'supply', 'logs', S.day) ? `the lumber camps at ${name}` : `the merchants at ${name}`;
 }
 const contractBase = (c, from, to) => CARGO[c].rate * Math.pow(distKm(from, to) / 100, .85) * rateMult(c, to) * 1.3;
@@ -2841,7 +2846,7 @@ function readColors() {
     shield: g('--shield'), treeDark: g('--tree-dark'), rock: g('--rock'), water: g('--water'), shoal: g('--shoal'), coast: g('--coast'), river: g('--river'),
     ink: g('--ink'), ink2: g('--ink-2'), rule: g('--rule'), surface: g('--surface'), surface2: g('--surface-2'), magenta: g('--magenta'),
     player: g('--player'), rival: g('--rival'), good: g('--good'), warn: g('--warn'), bad: g('--bad'), money: g('--money'),
-    logs: g('--c-logs'), lumber: g('--c-lumber'), coal: g('--c-coal'), supplies: g('--c-supplies'), fish: g('--c-fish'),
+    logs: g('--c-logs'), lumber: g('--c-lumber'), coal: g('--c-coal'), supplies: g('--c-supplies'), fish: g('--c-fish'), grain: g('--c-grain'),
     sand: g('--sand'), relief: g('--relief'), quartz: g('--quartz'), roofA: g('--roof-a'), roofB: g('--roof-b'), roofC: g('--roof-c'), wall: g('--wall'), wood: g('--wood'),
     road: g('--road'), roadCasing: g('--road-casing'), street: g('--street'), elevator: g('--elevator'), coalPile: g('--coal-pile'), lumberPile: g('--lumber-pile'), stackP: g('--stack-p') };
 }
@@ -3316,6 +3321,17 @@ function sendShipments(force) {
 // Grain elevators: [built, grain stops coming (if it does), pulled down or burned (if they are)]
 const ELEVATORS = { collingwood: [1871], midland: [1881], owensound: [1884], depot: [1898, 1933, 1946], mcnicoll: [1912] };
 const elevWorks = (p, y) => !!ELEVATORS[p] && y >= ELEVATORS[p][0] && y < (ELEVATORS[p][1] || 9999);
+// Grain by barge (from 1900): the working elevators fill with western grain from the big lake ships, and the flour mills
+// at Owen Sound and Meaford, the feed merchants in the towns and the camps up the north shore take it by the barge-load.
+// More comes down the lakes as the prairies fill, and less in the Depression.
+const GRAIN_FROM = dayOf(1900, 5, 15);
+const GRAIN_SUPPLY = { mcnicoll: .55, depot: .45, midland: .45, owensound: .25, collingwood: .25 };
+const GRAIN_DEMAND = { owensound: .12, meaford: .12, parrysound: .12, penetang: .08, littlecurrent: .08, wiarton: .07, southampton: .06, french: .05, spanish: .05, byng: .05, killarney: .04 };
+const GRAIN_MILLS = new Set(['owensound', 'meaford']);
+function grainSupply(pid, day) {
+  const y = yearOf(day); if (day < GRAIN_FROM || !elevWorks(pid, y)) return 0;
+  return (GRAIN_SUPPLY[pid] || 0) * (1 + .025 * clamp(y - 1900, 0, 24)) * (inCrash(day) ? .7 : 1);
+}
 const elevStands = (p, y) => !!ELEVATORS[p] && y >= ELEVATORS[p][0] && y < (ELEVATORS[p][2] || 9999);
 function trafficDay() {
   if (!S || !S.season) return;
@@ -3538,7 +3554,10 @@ function harbourUnload(t, pid) {
 function shipArrives(v) {
   const P = v.port && S.ports[v.port];
   if (v.mode === 'export') { v.loaded = true; if (P) { P.shipped = P.shipped || { rail: 0, road: 0, lake: 0 }; P.shipped.lake = (P.shipped.lake || 0) + 1; } }
-  else if (v.mode === 'import') { v.loaded = false; if (v.grainTo) shipInland(v.grainTo, 'grain', 6 + Math.floor(Math.random() * 5), 'out'); }
+  else if (v.mode === 'import') {
+    v.loaded = false;
+    if (v.grainTo) { shipInland(v.grainTo, 'grain', 6 + Math.floor(Math.random() * 5), 'out'); const s = supplyRate(v.grainTo, 'grain'), G = S.ports[v.grainTo]; if (s > 0) G.stock.grain = Math.min((G.stock.grain || 0) + 1.5, Math.max(4, s * 25)); }
+  }
 }
 function moveTraffic(days) {
   for (let i = vehicles.length - 1; i >= 0; i--) {
@@ -3840,7 +3859,7 @@ function shipHull(L, B, fine) {
   ctx.bezierCurveTo(L * (b + (1 - b) * .55), -B, L * b, -B, L * b - .5, -B); ctx.lineTo(-L * .88, -B); ctx.quadraticCurveTo(-L, -B, -L, 0);
   ctx.quadraticCurveTo(-L, B, -L * .88, B); ctx.lineTo(L * b - .5, B); ctx.bezierCurveTo(L * b, B, L * (b + (1 - b) * .55), B, L, 0); ctx.closePath();
 }
-function deckLoad(cargo, x0, x1, B) {
+function shipDeckLoad(cargo, x0, x1, B) {
   const w = x1 - x0;
   if (cargo === 'lumber' || cargo === 'pulpwood') {
     ctx.fillStyle = cargo === 'lumber' ? COL.lumber : '#9b7b55'; ctx.fillRect(x0, -B * .62, w, B * 1.24);
@@ -3873,7 +3892,7 @@ function drawShipBody(v, L, a, now, consort) {
     shipHull(L, B, true); ctx.fillStyle = dark; ctx.fill(); ctx.strokeStyle = rgba(COL.surface, .8); ctx.lineWidth = .6; ctx.stroke();
     ctx.save(); ctx.scale(.86, .74); shipHull(L, B, true); ctx.fillStyle = COL.wood; ctx.fill(); ctx.restore();
     ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(L, 0); ctx.lineTo(L * 1.3, 0); ctx.stroke(); // bowsprit
-    if (v.loaded) deckLoad(v.cargo, -L * .55, L * .45, B); else { ctx.fillStyle = rgba(COL.ink, .35); for (const x of [-.3, .1]) ctx.fillRect(L * x, -B * .35, L * .22, B * .7); }
+    if (v.loaded) shipDeckLoad(v.cargo, -L * .55, L * .45, B); else { ctx.fillStyle = rgba(COL.ink, .35); for (const x of [-.3, .1]) ctx.fillRect(L * x, -B * .35, L * .22, B * .7); }
     ctx.fillStyle = '#f3eee3'; ctx.fillRect(-L * .88, -B * .5, L * .22, B); // the after cabin
     const masts = consort ? [L * .45, -L * .05, -L * .5] : T.sail === 2 ? [L * .35, -L * .25] : [L * .45, -L * .05, -L * .5];
     sails(v, a, L, masts, now, consort ? .55 : 1);
@@ -3883,7 +3902,7 @@ function drawShipBody(v, L, a, now, consort) {
   if (v.type === 'steambarge') {
     shipHull(L, B, true); ctx.fillStyle = dark; ctx.fill(); ctx.strokeStyle = rgba(COL.surface, .8); ctx.lineWidth = .6; ctx.stroke();
     ctx.save(); ctx.scale(.88, .76); shipHull(L, B, true); ctx.fillStyle = COL.wood; ctx.fill(); ctx.restore();
-    if (v.loaded) deckLoad(v.cargo, -L * .45, L * .62, B);
+    if (v.loaded) shipDeckLoad(v.cargo, -L * .45, L * .62, B);
     ctx.fillStyle = '#f3eee3'; ctx.fillRect(-L * .92, -B * .62, L * .42, B * 1.24); ctx.fillRect(L * .66, -B * .45, L * .16, B * .9);
     ctx.fillStyle = '#9fd3e6'; ctx.fillRect(L * .8, -B * .3, .6, B * .6);
     ctx.fillStyle = '#1c1c1c'; ctx.beginPath(); ctx.arc(-L * .62, 0, 1.3, 0, 7); ctx.fill();
@@ -3896,7 +3915,7 @@ function drawShipBody(v, L, a, now, consort) {
   ctx.save(); ctx.scale(.94, .8); shipHull(L, B, false); ctx.fillStyle = v.deck || '#7d6a5a'; ctx.fill(); ctx.restore();
   ctx.strokeStyle = rgba(COL.ink, .45); ctx.lineWidth = .5; ctx.beginPath();
   for (let x = -L * .62; x < L * (bow - .12); x += Math.max(1.6, L / 14)) { ctx.moveTo(x, -B * .55); ctx.lineTo(x, B * .55); } ctx.stroke();
-  if (v.loaded && v.cargo === 'pulpwood') deckLoad('pulpwood', -L * .6, L * .6, B);
+  if (v.loaded && v.cargo === 'pulpwood') shipDeckLoad('pulpwood', -L * .6, L * .6, B);
   ctx.fillStyle = '#f3eee3'; ctx.fillRect(L * (bow - .1), -B * .7, L * .12, B * 1.4); ctx.fillRect(-L * .95, -B * .72, L * .26, B * 1.44);
   ctx.fillStyle = '#9fd3e6'; ctx.fillRect(L * (bow + .01), -B * .5, .6, B);
   ctx.fillStyle = v.stack || '#1c1c1c'; ctx.beginPath(); ctx.arc(-L * .8, 0, 1.4, 0, 7); ctx.fill();
@@ -4229,6 +4248,7 @@ function drawTug(t, sx, sy, zr, now) {
       x -= 13;
       ctx.fillStyle = COL.wood; ctx.fillRect(x, -3.2, 11, 6.4); ctx.strokeStyle = rgba(COL.ink, .7); ctx.lineWidth = .6; ctx.strokeRect(x, -3.2, 11, 6.4);
       if (c === 'coal') { ctx.fillStyle = COL.coal; ctx.beginPath(); ctx.ellipse(x + 5.5, 0, 4.3, 2.3, 0, 0, 7); ctx.fill(); }
+      else if (c === 'grain') { ctx.fillStyle = COL.grain; ctx.fillRect(x + 1.2, -2.4, 8.6, 4.8); ctx.fillStyle = rgba(COL.ink, .45); for (let i = 0; i < 3; i++) ctx.fillRect(x + 1.9 + i * 2.8, -2.4, .7, 4.8); }
       else if (c === 'lumber') { ctx.fillStyle = COL.lumber; ctx.fillRect(x + 1.2, -2.4, 8.6, 4.8); ctx.strokeStyle = rgba(COL.ink, .4); ctx.beginPath(); ctx.moveTo(x + 1.2, -.8); ctx.lineTo(x + 9.8, -.8); ctx.moveTo(x + 1.2, .8); ctx.lineTo(x + 9.8, .8); ctx.stroke(); }
       else { ctx.fillStyle = COL.roofC; for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) ctx.fillRect(x + 1.4 + i * 2.9, -2.3 + j * 2.5, 2.3, 2); }
     }
@@ -4298,6 +4318,7 @@ function drawTowTugShape(t, m, hullCol, mine, a = 0, f = 1) {
 function deckLoad(c, x0, x1, w) {
   const len = x1 - x0;
   if (c === 'coal') { ctx.fillStyle = COL.coal; ctx.beginPath(); ctx.ellipse(x0 + len / 2, 0, len / 2, w, 0, 0, 7); ctx.fill(); return; }
+  if (c === 'grain') { ctx.fillStyle = COL.grain; ctx.fillRect(x0, -w, len, w * 2); ctx.fillStyle = rgba(COL.ink, .45); for (let x = x0 + len / 8; x < x1 - 1; x += len / 4) ctx.fillRect(x, -w, len / 14, w * 2); return; }
   if (c === 'logs') { ctx.fillStyle = COL.logs; ctx.fillRect(x0, -w, len, w * 2); ctx.strokeStyle = rgba('#3b2a1a', .45); ctx.lineWidth = .3; for (let y = -w + .6; y < w; y += 1) { ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); } return; }
   if (c === 'lumber') { ctx.fillStyle = COL.lumber; ctx.fillRect(x0, -w, len, w * 2); ctx.strokeStyle = rgba(COL.ink, .35); ctx.lineWidth = .3; for (let x = x0 + 2; x < x1; x += 2.4) { ctx.beginPath(); ctx.moveTo(x, -w); ctx.lineTo(x, w); ctx.stroke(); } return; }
   ctx.fillStyle = COL.roofC; for (let x = x0 + .3; x < x1 - 1; x += 2.2) for (const y of [-w * .9, .1]) ctx.fillRect(x, y, 1.8, w * .8);
@@ -6226,7 +6247,7 @@ function titleHTML(saved) {
   <h1>Tugboat Tycoon</h1>
   <p class="sub">Logs, coal and whitefish on the Great Lakes, season after season</p>
   <ol class="how">
-    <li><b>Tow freight.</b> Give a tug a route between ports. It hauls logs to the sawmills, lumber to the railways, and coal and supplies wherever they're short.</li>
+    <li><b>Tow freight.</b> Give a tug a route between ports. It hauls logs to the sawmills, lumber to the railways, and coal and supplies wherever they're short; from 1900, grain from the elevators to the mills and towns.</li>
     <li><b>Fish the grounds.</b> Send fish tugs to the dashed circles. Fish them too hard and they collapse.</li>
     <li><b>Watch the glass.</b> Gales wreck log booms and sink boats, worst of all in November. Insurance runs out on 30 November, and the ice comes in December.</li>
     <li><b>Race for tows.</b> Wind-bound schooners and wrecks pay well. The first tug alongside gets the job, so beat the other companies' tugs to them.</li>
@@ -6245,7 +6266,7 @@ const homeHint = () => !inClaude && !asApp() && matchMedia('(pointer: coarse)').
 const EVENT_BOAT = { hooker: 'hooker', woodwrecker: 'woodwrecker', alligator: 'alligator', steamfish: 'steamfish', steel: 'steelcompound', wrecker: 'steelwrecker',
   lifter: 'liftertug', gasfish: 'gasfish', dieselfish: 'dieselfish', dieseltug: 'diesel' };
 function newspaperHTML(e) {
-  const model = EVENT_BOAT[e.id], m = model && MODELS[model], refit = e.id === 'refit', hw = e.id === 'harbourwork';
+  const model = EVENT_BOAT[e.id], m = model && MODELS[model], refit = e.id === 'refit', hw = e.id === 'harbourwork', gb = e.id === 'grainbarges';
   const tugs = refit ? S.tugs.filter(t => canRefit(t) && !t.refit) : hw ? S.tugs.filter(canHarbour) : [];
   const boatBit = m ? `${planThumb('boat', model, 'the ' + m.name)}<p class="paper-ad"><b>${esc(m.name)}</b> · ${money(m.price)} at the yards · ${m.warp ? `brings a boom of about ${WARP_LOGS} loads of logs down a river each week` : m.kind === 'fish' ? `holds ${m.hold} tons, works ${esc(m.net)} yards of net` : m.hooker ? `carries ${m.power} loads, ${m.power + (m.deckLoad || 0)} of lumber` : `tows ${m.power} barges or a ${m.power * 3}-load boom`} · ${m.kn} knots</p>`
     : refit ? `${planThumb('boat', 'woodrefit', 'a tug with her new compound engine')}<p class="paper-ad"><b>The compound refit</b> · ${money(REFIT_COST)} · about two weeks in the yard, or done over the winter</p>`
@@ -6254,7 +6275,7 @@ function newspaperHTML(e) {
     : tugs.length ? `<button class="btn wide" data-act="newsTug" data-id="${tugs[0].id}">See ${esc(tugs[0].name)}</button>` : '';
   return `<div class="paper">
   <p class="mast">The Georgian Bay Courier</p>
-  <div class="rules"><span>${fmtDate(e.day)}</span><span>${m || refit ? 'At the shipyards' : hw ? 'On the waterfront' : 'Price two cents'}</span></div>
+  <div class="rules"><span>${fmtDate(e.day)}</span><span>${m || refit ? 'At the shipyards' : hw || gb ? 'On the waterfront' : 'Price two cents'}</span></div>
   <p class="headline">${esc(e.head)}</p>
   ${boatBit}
   <p class="body">${esc(e.body)}</p></div>
@@ -6297,7 +6318,7 @@ function ledgerRows(L) {
   const rev = ledgerRevenue(L) + L.sales, cost = ledgerCost(L);
   return `<table class="ledger"><tbody>
     <tr class="head"><td colspan="2">Earnings</td></tr>
-    ${r(L.year >= 1912 ? 'Pulpwood' : 'Logs', L.logs)}${r('Lumber', L.lumber)}${r('Coal', L.coal)}${r('Supplies', L.supplies)}${r('Fish', L.fish)}${r('Tows', L.tows)}${r('Harbour work', L.harbour)}${r('Salvage', L.salvage)}${r('Insurance claims', L.insurance)}${r('Dividends received', L.divIn)}${r('Boats and cargo sold', L.sales)}
+    ${r(L.year >= 1912 ? 'Pulpwood' : 'Logs', L.logs)}${r('Lumber', L.lumber)}${r('Coal', L.coal)}${r('Supplies', L.supplies)}${r('Grain', L.grain)}${r('Fish', L.fish)}${r('Tows', L.tows)}${r('Harbour work', L.harbour)}${r('Salvage', L.salvage)}${r('Insurance claims', L.insurance)}${r('Dividends received', L.divIn)}${r('Boats and cargo sold', L.sales)}
     <tr><td><b>Total earnings</b></td><td>${money(rev)}</td></tr>
     <tr class="head"><td colspan="2">Expenses</td></tr>
     ${r('Crews and coal', L.running)}${r('Repairs', L.repairs)}${r('Winter refit', L.refit)}${r('Insurance', L.premiums)}${r('Interest', L.interest)}${r('Fishing licences', L.licences)}${r('Fines', L.fines)}${r('Lost nets', L.nets)}${r('Ice', L.ice)}${r('Contract penalties', L.penalties)}${r('Dividends paid', L.divOut)}
@@ -6779,6 +6800,8 @@ function toast(text, bad) {
 function migrate() {
   for (const t of S.tugs) { if (OLD_MODELS[t.model]) t.model = OLD_MODELS[t.model]; if (t.earnTotal == null) t.earnTotal = t.earn || 0; }
   if (S.contracts) S.contracts = S.contracts.filter(k => k.state !== 'tender');
+  // lines the accounts have gained since the game was saved (harbour work, grain)
+  if (S.ledger) for (const [k, v] of Object.entries(newLedger(S.ledger.year))) if (S.ledger[k] == null) S.ledger[k] = v;
   if (S.seasonOpen == null) S.seasonOpen = S.year === 1870 ? dayOf(1870, 4, 20) : dayOf(S.year, 4, 17);
   for (const t of S.tugs) if (t.owner === 'p' && t.cost == null) t.cost = S.season ? runCost(t) * (t.state === 'laid' ? LAID_COST : 1) * Math.max(0, S.day - Math.max(S.seasonOpen, t.bought)) : 0;
   if (!S.gameId) S.gameId = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => (b % 36).toString(36)).join('');
