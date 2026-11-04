@@ -304,6 +304,7 @@ table.cargo td.n{text-align:right}
 #adviceBtn{position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;min-height:40px;padding:0 8px 0 14px;background:var(--surface);color:var(--ink);border:1px solid var(--magenta);border-radius:20px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px -10px var(--shadow)}
 #adviceBtn b{min-width:24px;height:24px;border-radius:12px;background:var(--magenta);color:var(--on-magenta);display:grid;place-items:center;font-size:13px;padding:0 6px}
 #adviceBtn[hidden]{display:none}
+#panel .fine a{color:var(--coast)}
 .advice{list-style:none;margin:8px 0 4px;padding:0;display:flex;flex-direction:column;gap:8px}
 .advice li{border:1px solid var(--rule);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .advice li.urgent{border-left:4px solid var(--magenta)}
@@ -1674,6 +1675,7 @@ function addNews(text, opts = {}) {
   ui.tickerDirty = true; ui.panelDirty = true;
 }
 function checkEvents() {
+  wreckNews();
   for (const e of EVENTS) {
     if (S.fired[e.id] || S.day < e.day) continue;
     S.fired[e.id] = true;
@@ -2728,6 +2730,7 @@ const SAVE_KEY = 'tugboat-tycoon-save-v1', GAMES_KEY = 'tugboat-tycoon-games-v1'
 let inPlay = false, lastSaveMonth = null;
 function loadGames() { try { const o = JSON.parse(localStorage.getItem(GAMES_KEY) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; } }
 const GAME_GLYPH = () => `<svg class="glyph" viewBox="0 0 22 22" aria-hidden="true">${GLYPHS.woodsimple('var(--player)', 'var(--magenta)')}</svg>`;
+const WRECK_GLYPH = '<svg class="glyph" viewBox="0 0 22 22" aria-hidden="true"><ellipse cx="11" cy="11" rx="9" ry="5.6" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="1.6 1.8"/><path d="M4.5 11h13M7.5 8v6M11 8v6M14.5 8v6" stroke="var(--ink)" stroke-width="1.5"/></svg>';
 const PERSON_GLYPH = '<svg class="glyph" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="7" r="3.6" fill="var(--ink)"/><path d="M4 19.5c0-4.2 3.1-6.8 7-6.8s7 2.6 7 6.8z" fill="var(--ink)"/></svg>';
 const gameWhen = s => `${s.season ? MONTHS[dateOf(s.day).getUTCMonth()] : 'Winter'} ${s.year}`;
 function saveGame(quiet) {
@@ -4052,6 +4055,7 @@ function draw(now) {
   drawLights(zr, now);
   if (!baked) drawMapNames(zr);
   drawSparkles(zr, now);
+  drawWrecks(zr);
   // fishing grounds
   for (const g of GROUNDS) {
     const G = S.grounds[g.id], p = nodePos('g:' + g.id), [sx, sy] = w2s(...p), r = Math.max(13, 5.5 * cam.z);
@@ -4881,7 +4885,8 @@ function hitTest(x, y) {
   const tugs = S.tugs.map(t => ({ t: 'tug', id: t.id, s: w2s(t.x, t.y) }));
   const ships = vehicles.filter(v => v.ship && v.hit).map(v => ({ t: 'ship', id: v.id, s: v.hit }));
   const label = !mode && portLabels.find(l => x >= l.x - 4 && x <= l.x + l.w + 4 && y >= l.y - 5 && y <= l.y + l.h + 5); if (label) return { t: 'port', id: label.id, label: true };
-  return best(jobs, 24) || best(tugs.filter(t => S.tugs.find(x => x.id === t.id).owner === 'p'), 20) || best(ports, 20) || best(tugs, 18) || best(ships, 22) || best(grounds, Math.max(22, 5.5 * cam.z)) || hitLines(x, y);
+  const wrecks = wrecksNow().map(w => ({ t: 'wreck', id: w.id, s: w2s(...wreckPos(w)) }));
+  return best(jobs, 24) || best(tugs.filter(t => S.tugs.find(x => x.id === t.id).owner === 'p'), 20) || best(ports, 20) || best(tugs, 18) || best(ships, 22) || best(wrecks, 16) || best(grounds, Math.max(22, 5.5 * cam.z)) || hitLines(x, y);
 }
 // Everything a tap could have meant: the jobs, boats, ships and the town under the finger, nearest first
 function hitAll(x, y) {
@@ -4891,6 +4896,7 @@ function hitAll(x, y) {
   for (const t of S.tugs) { const d = near(w2s(t.x, t.y), (t.owner === 'p' ? 20 : 18) + 8 * (tugF(cam.z / cam.fitZ) - 1)); if (d != null) out.push({ t: 'tug', id: t.id, d: d - (t.owner === 'p' ? 2 : 0) }); }
   for (const p of PORTS) if (portOpen(p.id)) { const d = near(w2s(...nodePos('p:' + p.id)), 20); if (d != null) out.push({ t: 'port', id: p.id, d: d + 1 }); }
   for (const v of vehicles) if (v.ship && v.hit) { const d = near(v.hit, 22); if (d != null) out.push({ t: 'ship', id: v.id, d }); }
+  for (const w of wrecksNow()) { const d = near(w2s(...wreckPos(w)), 16); if (d != null) out.push({ t: 'wreck', id: w.id, d: d + 2 }); }
   return out.sort((a, b) => a.d - b.d);
 }
 function pickerRow(h) {
@@ -4898,6 +4904,7 @@ function pickerRow(h) {
   if (h.t === 'tug') { const t = S.tugs.find(t => t.id === h.id), m = MODELS[t.model], what = m.sail ? 'boat' : isFish(t) ? 'fish tug' : 'tug';
     return [tugGlyph(t), t.name, t.owner === 'p' ? `Your ${what}` : `${coName(t.co)}'s ${what}`]; }
   if (h.t === 'ship') { const v = vehicles.find(v => v.id === h.id); return [stockGlyph('ship'), v.name, SHIP_TYPES[v.type].name]; }
+  if (h.t === 'wreck') return [WRECK_GLYPH, WRECK[h.id].name, `Wreck, ${WRECK[h.id].date[0]}`];
   const j = S.jobs.find(j => j.id === h.id); return [jobGlyph(j), j.name, j.kind === 'salvage' ? 'Salvage wanted' : 'Tow wanted'];
 }
 function showPicker(hits, x, y) {
@@ -4973,6 +4980,7 @@ function renderPanel() {
   else if (ui.sel.t === 'exch') html = exchangeHTML();
   else if (ui.sel.t === 'contract') html = contractHTML(ui.sel.id);
   else if (ui.sel.t === 'stock') html = stockHTML(ui.sel.id);
+  else if (ui.sel.t === 'wreck') html = wreckHTML(ui.sel.id);
   if (html == null) { ui.sel = null; html = companyHTML(); }
   if (html !== ui.lastPanel) { const sc = $('#panel').scrollTop; panelEl.innerHTML = html; ui.lastPanel = html; $('#panel').scrollTop = sc; }
   ui.panelDirty = false;
@@ -6547,6 +6555,104 @@ function boardHTML(data) {
   <p class="fine">Ranked by each player's best game: the most any of their companies has been worth. Starting a new game never lowers it. The little boats are the fleet in the game they're playing now. Where they play from is roughly where their internet connection is, unless they hide it. A game reports in when it starts and every few minutes while it's open.</p>
   ${boardNameHTML('board')}${close}`;
 }
+/* ---------- Shipwrecks of the bay: real wrecks, marked on the chart from the day each was lost, with a card and a place
+   on the history timeline. { id, name, kind, date: [y, m, d], at: [lat, lon] (roughly where she lies), place, lost,
+   text, today, src: [[label, url]] } ---------- */
+const WRECKS = [
+  { id: 'maryward', name: 'Mary Ward', kind: 'steamer', date: [1872, 11, 24], at: [44.561, -80.329], place: "on Milligan's Reef off Craigleith, between Collingwood and Thornbury", lost: 'Eight drowned; the rest were saved.',
+    text: "Bound from Sarnia for Collingwood with coal oil, salt and passengers, she went off course in the dark and ran onto the reef. Next morning a storm blew up, and eight men who set out for shore in a lifeboat were drowned. Fishermen from Thornbury took off everyone else, and the ship broke up on the reef.",
+    today: 'Divers visit what is left of her. A plaque stands in Craigleith Provincial Park.', news: "The steamer Mary Ward is on Milligan's Reef off Craigleith. Eight men drowned trying for shore in a lifeboat; Thornbury fishermen saved the rest.",
+    src: [['Wikipedia: Mary Ward', 'https://en.wikipedia.org/wiki/Mary_Ward_(ship)']] },
+  { id: 'waubuno', name: 'Waubuno', kind: 'side-wheel steamer', date: [1879, 11, 22], at: [45.1208, -80.1661], place: 'south of Parry Sound, near Moose Point', lost: 'All aboard, about two dozen people, were lost.',
+    text: 'She left Collingwood for Parry Sound before dawn, heavily laden, into a November gale and snow, was seen near Christian Island, and was never seen again. No one aboard was found. An overturned hull found the next year began an argument, never settled, over whether she foundered, struck a reef or blew her boiler.',
+    today: 'A hull in shallow water near Wreck Island is believed to be hers. Her anchor is at Parry Sound and her rudder at the Huronia Museum in Midland.', news: 'The paddle steamer Waubuno, bound from Collingwood for Parry Sound, is missing in the gale with everyone aboard.',
+    tl: 'The Waubuno is lost', tlBody: 'The paddle steamer Waubuno vanished in a November gale on her run from Collingwood to Parry Sound. All aboard, some two dozen people, were lost.',
+    src: [['Wikipedia: PS Waubuno', 'https://en.wikipedia.org/wiki/PS_Waubuno']] },
+  { id: 'janemiller', name: 'Jane Miller', kind: 'steamer', date: [1881, 11, 25], at: [44.8, -81.03], place: "in Colpoy's Bay, inside White Cloud Island, near Wiarton", lost: 'All aboard, about 28 people, were lost.',
+    text: "Loaded high with deck cargo at Meaford, she was seen passing White Cloud Island into Colpoy's Bay in a snowstorm, bound for a wharf near Wiarton, and vanished. Wreckage came ashore on White Cloud Island. Her wreck was found sitting upright in deep water in 2017.",
+    today: 'She is a protected site and her position has not been made public, so the mark here is only near where she lies.', news: "The little steamer Jane Miller has vanished in Colpoy's Bay in the snow. Wreckage is coming ashore on White Cloud Island.",
+    src: [['Wikipedia: SS Jane Miller', 'https://en.wikipedia.org/wiki/SS_Jane_Miller']] },
+  { id: 'asia', name: 'Asia', kind: 'propeller steamer', date: [1882, 9, 14], at: [45.67, -81.04], place: 'in open water off the eastern shore, bound for the French River', lost: 'About 120 lost; two survived.', event: 'asia',
+    text: 'Top-heavy with freight and passengers, bound from Owen Sound for the French River and Sault Ste. Marie, she foundered in a gale. Her lifeboats capsized again and again. Only Duncan Tinkiss and Christy Ann Morrison, both still in their teens, reached the shore near Pointe au Baril alive.',
+    today: 'Her wreck has never been found. The mark is on her course, between Lonely Island and Byng Inlet, where she is thought to have gone down.',
+    tl: 'The Asia sinks', tlBody: 'The steamer Asia foundered in a gale off the eastern shore, bound for the French River. Two of the roughly 120 people aboard survived: the worst shipwreck in the history of the bay.',
+    src: [['Wikipedia: SS Asia', 'https://en.wikipedia.org/wiki/SS_Asia_(1873)']] },
+  { id: 'arabia', name: 'Arabia', kind: 'barque', date: [1884, 10, 5], at: [45.312, -81.674], place: 'off Echo Island, near Tobermory', lost: 'Her crew got away in their boat.',
+    text: 'Bound from Chicago for Midland with some 20,000 bushels of corn, the old Kingston-built barque sprang a leak in a gale and sank. Her crew escaped in their boat, and a tug took them to Wiarton. She lies upright and whole in deep water.',
+    today: 'A dive for experienced divers in Fathom Five National Marine Park.', news: 'The barque Arabia, with corn for Midland, has sunk in a gale off Echo Island near Tobermory. Her crew are safe at Wiarton.',
+    src: [['Wikipedia: Fathom Five National Marine Park', 'https://en.wikipedia.org/wiki/Fathom_Five_National_Marine_Park']] },
+  { id: 'sweepstakes', name: 'Sweepstakes', kind: 'schooner', date: [1885, 9, 1], when: 'September 1885', at: [45.2553, -81.6806], place: 'at the head of Big Tub Harbour, Tobermory', lost: 'No one was lost.',
+    text: 'Damaged off Cove Island that summer, she was towed into Big Tub Harbour by the tug Jessie to be repaired, and sank there before she could be. Her coal was saved. Her hull is still largely whole, one of the best-kept nineteenth-century schooners on the lakes.',
+    today: 'In shallow water: the glass-bottom boats at Tobermory pass over her, and snorkellers and divers visit.', news: 'The schooner Sweepstakes, towed into Big Tub Harbour for repairs after striking off Cove Island, has sunk at her moorings.',
+    src: [['Wikipedia: Sweepstakes', 'https://en.wikipedia.org/wiki/Sweepstakes_(schooner)']] },
+  { id: 'africa', name: 'Africa', kind: 'steam barge', date: [1895, 10, 6], when: 'early October 1895', at: [44.97, -81.45], place: "in Lake Huron off the Bruce shore, near Lyal Island", lost: 'All her crew, about eleven men, were lost.',
+    text: 'Bound from Ashtabula for Owen Sound with coal, towing the barge Severn, she cast the barge off in a gale and disappeared. The Severn went ashore and her crew lived. A wreck found in deep water in 2023 is believed to be hers.',
+    today: 'Her position has not been published; the mark is off Lyal Island, where her lifeboat came ashore.', news: 'The steamer Africa, coal for Owen Sound, is missing with all hands off the Bruce shore. Her barge Severn is ashore; its crew are safe.',
+    src: [['Wikipedia: shipwrecks in the Great Lakes', 'https://en.wikipedia.org/wiki/List_of_shipwrecks_in_the_Great_Lakes']] },
+  { id: 'wetmore', name: 'W. L. Wetmore', kind: 'steam barge', date: [1901, 11, 29], at: [45.268, -81.709], place: 'on Russel Island, just west of Tobermory', lost: 'All 27 sailors on her and her barges were saved.',
+    text: 'Carrying lumber from Parry Sound to Tonawanda, with the barges James C. King and Brunette in tow, she lost her way in a snowstorm running for shelter at Tobermory and was driven ashore and pounded to pieces. The King was wrecked too.',
+    today: 'Her boiler, anchor, chain and rudder lie in shallow water, a favourite dive in Fathom Five National Marine Park.', news: 'The steam barge W. L. Wetmore and her barge James C. King are ashore and breaking up at Russel Island off Tobermory. All hands are safe.',
+    src: [['Wikipedia: Fathom Five National Marine Park', 'https://en.wikipedia.org/wiki/Fathom_Five_National_Marine_Park']] },
+  { id: 'atlantic', name: 'Atlantic', kind: 'steamer', date: [1903, 11, 10], at: [45.334, -80.261], place: 'in the Killbear Channel, west of Parry Sound', lost: 'Everyone aboard reached Parry Sound in the boats.',
+    text: "A Northern Navigation Co. steamer bound from Collingwood for Byng Inlet with supplies for the lumber camps, she caught fire in her engine room, drifted burning onto Spruce Rock and sank.",
+    today: 'A dive from Parry Sound. The mark is near Spruce Rock, where she is said to lie.', news: 'The steamer Atlantic has burned and sunk in the Killbear Channel near Parry Sound. All aboard are safe.',
+    src: [['Maritime History of the Great Lakes', 'https://images.maritimehistoryofthegreatlakes.ca/59895/data']] },
+  { id: 'metamora', name: 'Metamora', kind: 'tug', date: [1907, 9, 29], at: [45.5287, -80.4074], place: 'off Turning Island, near Pointe au Baril', lost: 'Everyone swam ashore.',
+    text: 'An old wooden tug from Cleveland, towing a boom of logs for Byng Inlet, she struck a shoal, caught fire and sank in shallow water. One of our own trade.',
+    today: "Her boiler still shows above the water, painted white as a channel marker. People at Pointe au Baril call it The Wreck.", news: 'The tug Metamora, towing logs for Byng Inlet, has burned and sunk on a shoal off Turning Island. Her crew swam ashore.',
+    src: [['Wikipedia: Metamora', 'https://en.wikipedia.org/wiki/Metamora_(shipwreck)']] },
+  { id: 'grandrapids', name: 'City of Grand Rapids', kind: 'steamer', date: [1907, 10, 29], at: [45.2541, -81.6800], place: 'at the head of Big Tub Harbour, Tobermory', lost: 'No one was lost.',
+    text: 'Newly bought by Tobermory owners, she caught fire at the dock in Little Tub Harbour and was let go so the town would not burn. She drifted into Big Tub Harbour and burned to the waterline, just by the Sweepstakes.',
+    today: 'Her lower hull lies in shallow water beside the Sweepstakes, seen from the glass-bottom boats.', news: 'The steamer City of Grand Rapids has burned at Tobermory. She was cut loose to save the docks and burned out in Big Tub Harbour.',
+    src: [['Wikipedia: shipwrecks in the Great Lakes', 'https://en.wikipedia.org/wiki/List_of_shipwrecks_in_the_Great_Lakes']] },
+  { id: 'mapledawn', name: 'Mapledawn', kind: 'steel freighter', date: [1924, 11, 30], at: [44.845, -80.25], place: 'on the shoals off Christian Island', lost: 'Her crew were saved.',
+    text: 'Bound for Port McNicoll with barley, she ran onto the shoals of Christian Island in a blinding snowstorm. About 75,000 bushels were saved, but the ship was lost, and she was later cut up where she lay.',
+    today: "What is left lies in shallow water off the island's west shore, a dive site. The mark is approximate.", news: 'The freighter Mapledawn, barley for Port McNicoll, is hard aground on Christian Island in the snow.',
+    src: [['Wikipedia: Christian Island', 'https://en.wikipedia.org/wiki/Christian_Island']] },
+  { id: 'manasoo', name: 'Manasoo', kind: 'steamer', date: [1928, 9, 15], at: [44.851, -80.869], place: 'off Griffith Island, at the mouth of Owen Sound', lost: 'Sixteen lost; five survived.',
+    text: 'Bound from Manitowaning for Owen Sound with 115 cattle and two motor cars, she took a list in a storm, perhaps as the cattle shifted, and rolled over and sank in minutes. Six reached a raft and one died of the cold. The CPR steamer Manitoba picked up the other five some 60 hours later. Her wreck was found in 2018.',
+    today: 'She lies too deep for anyone but technical divers.', news: 'The steamer Manasoo has capsized off Griffith Island in the storm. Five survivors have been picked up from a raft by the Manitoba.',
+    src: [['Wikipedia: SS Manasoo', 'https://en.wikipedia.org/wiki/SS_Manasoo']] },
+  { id: 'wawinet', name: 'Wawinet', kind: 'motor yacht', date: [1942, 9, 21], at: [44.835, -79.87], place: 'off the tip of Beausoleil Island', lost: 'Twenty-five drowned; seventeen survived.',
+    text: 'Her owner, Bertrand Corbeau, was taking a party of men from the Midland Foundry and Machine Company back to Penetanguishene one September night when the yacht heeled in a sharp turn, filled and sank in about two minutes. Corbeau was among the dead.',
+    today: 'A dive site in Georgian Bay Islands National Park. The mark is approximate.', news: 'The yacht Wawinet has sunk off Beausoleil Island with a party from the Midland foundry aboard. Twenty-five are drowned.',
+    src: [['Wikipedia: shipwrecks in the Great Lakes', 'https://en.wikipedia.org/wiki/List_of_shipwrecks_in_the_Great_Lakes']] },
+].map(w => ({ ...w, day: dayOf(...w.date) }));
+const WRECK = Object.fromEntries(WRECKS.map(w => [w.id, w]));
+// where she lies, nudged off the chart's land onto the nearest water if the coastline is coarser than her position
+const wreckPos = w => w.pos || (w.pos = snapWater(...ll(...w.at), 1));
+const wrecksNow = () => WRECKS.filter(w => S.day >= w.day);
+// The chart's own wreck sign: a hull line crossed by three masts, in a dotted ring
+function drawWrecks(zr) {
+  for (const w of wrecksNow()) {
+    const [sx, sy] = w2s(...wreckPos(w)), sel = ui.sel && ui.sel.t === 'wreck' && ui.sel.id === w.id;
+    if (sx < -40 || sy < -40 || sx > vw + 40 || sy > vh + 40) continue;
+    const r = clamp(5 + zr * 1.2, 6, 11);
+    ctx.save(); ctx.translate(sx, sy);
+    ctx.fillStyle = rgba(COL.surface, .35); ctx.beginPath(); ctx.ellipse(0, 0, r * 1.35, r * .8, 0, 0, 7); ctx.fill();
+    ctx.setLineDash([1.6, 2]); ctx.lineWidth = 1.1; ctx.strokeStyle = rgba(COL.ink, .7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-r * .9, 0); ctx.lineTo(r * .9, 0);
+    for (const x of [-.45, 0, .45]) { ctx.moveTo(r * x, -r * .45); ctx.lineTo(r * x, r * .45); }
+    ctx.strokeStyle = rgba(COL.ink, .85); ctx.stroke();
+    if (sel) { ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, 7); ctx.strokeStyle = COL.magenta; ctx.lineWidth = 2.2; ctx.stroke(); }
+    ctx.restore();
+    if (zr > 2.2 || sel) { ctx.font = `italic 12.5px ${FONT_IT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; halo(w.name, sx, sy + r + 3, COL.ink); }
+  }
+}
+function wreckHTML(id) {
+  const w = WRECK[id]; if (!w) return '';
+  const i = HISTORY.findIndex(e => e.wreck === id);
+  return `${head(`Shipwreck · ${esc(w.kind)}`, esc(w.name))}
+  <p class="desc">Lost ${w.when ? esc(w.when) : fmtDate(w.day)}, ${esc(w.place)}.${w.lost ? ` ${esc(w.lost)}` : ''}</p>
+  <p>${esc(w.text)}</p>
+  ${w.today ? `<p class="fine">${esc(w.today)}</p>` : ''}
+  ${i >= 0 ? `<div class="row"><button class="btn wide" data-act="wreckTimeline" data-i="${i}">On the history timeline</button></div>` : ''}
+  <p class="fine">${w.src.map(([t, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(t)}</a>`).join(' · ')}</p>`;
+}
+// When a wreck's day comes in the game, the news has it
+function wreckNews() {
+  for (const w of WRECKS) if (S.day >= w.day && !S.fired['w:' + w.id]) { S.fired['w:' + w.id] = true; if (S.day - w.day < 30 && !w.event) addNews(w.news); }
+}
 /* ---------- The bay's history, 1870 to today: real events on and around Georgian Bay, and what shaped it ----------
    [year, month, kind, headline, what happened]. Kinds: ships, land (railways and roads), trade (timber, fish, trade and
    industry), world (wars and the world), nature (the water, its fish and its parks), people (First Nations and government). */
@@ -6565,9 +6671,7 @@ const HISTORY = [
   [1876, 5, 'nature', 'Storm signals on the lakes', "Canada's weather service began hoisting storm signals at the lake ports to warn boats of coming gales."],
   [1879, 3, 'land', 'Railways reach Midland and Penetanguishene', 'The Midland Railway reached its new town of Midland, and the Northern Railway reached Penetanguishene.'],
   [1879, 3, 'trade', 'The National Policy', "Sir John A. Macdonald's tariffs put duties on imports, American coal among them, to build up Canadian industry."],
-  [1879, 11, 'ships', 'The Waubuno is lost', 'The paddle steamer Waubuno vanished in a November gale on her run from Collingwood to Parry Sound. All aboard, some two dozen people, were lost.'],
   [1880, 5, 'trade', "Michigan's pine runs short", "Michigan's sawmills had cut most of their own pine and began to buy logs from the Georgian Bay shore."],
-  [1882, 9, 'ships', 'The Asia sinks', 'The steamer Asia foundered in a gale off the eastern shore, bound for the French River. Two of the roughly 120 people aboard survived: the worst shipwreck in the history of the bay.'],
   [1884, 5, 'ships', "The CPR's steamers sail from Owen Sound", 'The Canadian Pacific Railway began its own steamer service from Owen Sound to Port Arthur on Lake Superior.'],
   [1885, 5, 'trade', 'Log rafts for Michigan', 'Huge rafts of Georgian Bay logs were towed across Lake Huron to the sawmills of the Saginaw River.'],
   [1885, 11, 'land', 'The last spike', 'The Canadian Pacific Railway was finished across the country. While the line round Lake Superior was built, its men and supplies had gone west by boat from Georgian Bay.'],
@@ -6613,7 +6717,9 @@ const HISTORY = [
   [2018, 11, 'people', 'The Williams Treaties settlement', 'Canada and Ontario settled with the seven Williams Treaties First Nations, recognising their rights to hunt and fish on their treaty lands.'],
   [2020, 7, 'nature', 'High water again', 'Seven years after their record low, Lakes Michigan and Huron set monthly high-water records through 2019 and 2020.'],
   [2023, 6, 'people', '$10 billion for a broken promise', "Canada and Ontario agreed to pay $10 billion to the 21 First Nations of the Robinson-Huron Treaty for the payments frozen at $4 since 1874."],
-].map(([y, m, k, head, body]) => ({ y, m, k, head, body, at: y + (m - .5) / 12 }));
+].map(([y, m, k, head, body]) => ({ y, m, k, head, body, at: y + (m - .5) / 12 }))
+  .concat(WRECKS.map(w => ({ y: w.date[0], m: w.date[1], k: 'ships', head: w.tl || `The ${w.name} is lost`, body: w.tlBody || w.text, at: w.date[0] + (w.date[1] - .5) / 12, wreck: w.id })))
+  .sort((a, b) => a.at - b.at);
 const TL0 = 1870, TL_PX = 18, TL_PAD = 60;
 const tlEnd = () => Math.max(2026, new Date().getFullYear()) + 1;
 const tlX = at => Math.round(TL_PAD + (at - TL0) * TL_PX);
@@ -6644,7 +6750,7 @@ function tlPick(i, scroll) {
   tlSel = clamp(i, 0, HISTORY.length - 1);
   const e = HISTORY[tlSel], [kind, c] = TL_KINDS[e.k], card = $('#tlCard'); if (!card) return;
   card.style.setProperty('--c', `var(${c})`);
-  card.innerHTML = `<span class="when"><i></i>${MONTHS[e.m - 1]} ${e.y} · ${esc(kind)}</span><h4>${esc(e.head)}</h4><p class="desc">${esc(e.body)}</p>${S && e.at > tlGame() && e.y <= 1959 ? '<span class="soon">Still to come in your game.</span>' : ''}`;
+  card.innerHTML = `<span class="when"><i></i>${MONTHS[e.m - 1]} ${e.y} · ${esc(kind)}</span><h4>${esc(e.head)}</h4><p class="desc">${esc(e.body)}</p>${S && e.at > tlGame() && e.y <= 1959 ? '<span class="soon">Still to come in your game.</span>' : e.wreck && S ? `<div class="row"><button class="btn" data-act="wreckChart" data-id="${e.wreck}">Show her wreck on the chart</button></div>` : ''}`;
   for (const d of document.querySelectorAll('#modalBody .tl-dot')) d.classList.toggle('on', +d.dataset.i === tlSel);
   const sc = $('#tlScroll'), x = tlX(e.at);
   if (sc && scroll !== false && (x < sc.scrollLeft + 40 || x > sc.scrollLeft + sc.clientWidth - 40)) sc.scrollTo({ left: x - sc.clientWidth / 2, behavior: scroll === 'jump' ? 'auto' : 'smooth' });
@@ -6715,6 +6821,8 @@ const ACTS = {
   history: el => openHistory(!!el.closest('#modalBody')),
   season: () => showModal(seasonHTML()),
   advice: () => showModal(adviceHTML()),
+  wreckTimeline: el => { openHistory(false); tlPick(+el.dataset.i, 'jump'); },
+  wreckChart: el => { const w = WRECK[el.dataset.id]; closeModal(); if (!w) return; select({ t: 'wreck', id: w.id }); flyTo(wreckPos(w), cam.fitZ * 4); },
   adviceBtn: el => { try { if (el.dataset.v === '1') localStorage.removeItem(ADVICE_OFF); else localStorage.setItem(ADVICE_OFF, '1'); } catch (e) {} adviceSig = '-'; adviceTick(); showModal(adviceHTML()); },
   adviceOffers: () => { const h = offersHTML(); if (h) showModal(h); else closeModal(); },
   adviceContract: el => { closeModal(); select({ t: 'contract', id: el.dataset.id }); },
@@ -7962,7 +8070,7 @@ function start(data) {
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
 }
-window.__tugboatMap = MAP; window.__tugboat = { BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
+window.__tugboatMap = MAP; window.__tugboat = { WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
     for (const type of ['schooner2', 'schooner3', 'steambarge', 'laker', 'canaller', 'passenger']) { [0, .8, 1.57, 2.6, 3.14, -1.57].forEach((a, i) => { const v = { type, name: type, lenFt: type === 'laker' ? 500 : type === 'canaller' ? 255 : type === 'steambarge' ? 190 : 130, loaded: i % 2 === 0, cargo: 'lumber', hue: '#2f3a40' }; const L = shipLen(v); ctx.save(); ctx.translate(60 + i * 110, y); ctx.scale(scale / 2, scale / 2); ctx.rotate(a); drawShipBody(v, L, a, 0, false); ctx.restore(); }); y += 95; } ctx = keep; }, addShip, shipType, seaPath, shipsDay, advance(days) { for (let d = 0; d < days; d += .05) { simAdvance(.05); moveTraffic(.05); if (Math.floor(S.day) !== lastTrafficDay) { lastTrafficDay = Math.floor(S.day); trafficDay(); } } }, vehicles,  get WET() { return WET; }, CELL, isWet, NETPOS, RAIL_SEGS, ROAD_SEGS, ll, homeView, renderHI, clampCam, get fling() { return fling; }, get gesture() { return gesture; }, get HI() { return HI; }, get S() { return S; }, simAdvance, startSeason, endSeason, newGame, PORT, GROUND, MODELS, getPath, nodePos, deliveryValue, distKm, buyTug, saveRoute, assignGround, netWorth, ui, select, cam, get GW() { return GW; }, get GH() { return GH; }, get WATER() { return WATER; } };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
