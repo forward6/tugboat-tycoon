@@ -3409,10 +3409,19 @@ function addShip(type, cargo, from, port, to, mode, extra = {}) {
     amount: T.perFt ? Math.round(lenFt * T.perFt[cargo] / 10) * 10 : T.cap[cargo] ? Math.round((T.cap[cargo][0] + (T.cap[cargo][1] - T.cap[cargo][0]) * sz) / (cargo === 'lumber' ? 1000 : 10)) * (cargo === 'lumber' ? 1000 : 10) : 0,
     loaded: mode === 'import' || mode === 'through' || mode === 'passenger', ...extra });
   if (!v) return null;
-  v.v = T.kn * KNOT * 24;
+  v.v = T.kn * KNOT * SHIP_HOURS;
   if (scatter) v.s = rnd(.1, .8) * v.P.len;
-  if (T.consorts) { const n = T.consorts[0] + Math.floor(Math.random() * (T.consorts[1] - T.consorts[0] + 1)); v.consorts = []; for (let i = 0; i < n; i++) v.consorts.push(pick(SHIP_NAMES.schooner.filter(s => s !== v.name))); v.v = T.knTow * KNOT * 24; }
+  if (T.consorts) { const n = T.consorts[0] + Math.floor(Math.random() * (T.consorts[1] - T.consorts[0] + 1)); v.consorts = []; for (let i = 0; i < n; i++) v.consorts.push(pick(SHIP_NAMES.schooner.filter(s => s !== v.name))); v.v = T.knTow * KNOT * SHIP_HOURS; }
   return v;
+}
+// The lake ships keep the tugs' daylight clock on the chart, so a laker is a little faster than a tug rather than twice
+// as fast; and they slow over the last few km into a port and gather way again leaving it
+const SHIP_HOURS = 14, PORT_EASE_KM = 12;
+function portEase(v) {
+  let f = 1;
+  if (v.legs && v.leg < v.legs.length - 1) { const rem = v.P.len - v.s; if (rem < PORT_EASE_KM) f = Math.min(f, .3 + .7 * Math.max(0, rem) / PORT_EASE_KM); }
+  if (v.legs && v.leg > 0 && v.s < PORT_EASE_KM) f = Math.min(f, .3 + .7 * Math.max(0, v.s) / PORT_EASE_KM);
+  return f;
 }
 function shipSpeedFactor(v) {
   const k = S.weather.today.k, T = SHIP_TYPES[v.type];
@@ -3493,7 +3502,7 @@ function moveTraffic(days) {
   for (let i = vehicles.length - 1; i >= 0; i--) {
     const v = vehicles[i];
     if (v.dwell > 0) { v.dwell -= days; if (v.dwell <= 0 && v.ship && v.atPort) { shipArrives(v); v.atPort = null; } continue; }
-    v.s += v.v * days * (v.ship ? shipSpeedFactor(v) : 1);
+    v.s += v.v * days * (v.ship ? shipSpeedFactor(v) * portEase(v) : 1);
     const stop = v.P.stops[v.si];
     if (stop != null && v.s >= stop) { v.s = stop; v.si++; v.dwell = v.kind === 'train' ? .03 : .01; }
     if (v.s >= v.P.len) {
@@ -7500,14 +7509,14 @@ function hUpdateBoats(now) {
   const d = HB.d, here = hBoatsHere(HB.id), keys = new Set(here.map(b => b.key)), ch = d.channel;
   for (const [key, e] of HB.disp) if (!keys.has(key) && e.state !== 'leave') {
     const p = [[e.x, e.y], [e.x + e.bth.out[0] * 25, e.y + e.bth.out[1] * 25], ...ch.slice().reverse()];
-    hFree({ ...e.bth, key }); Object.assign(e, { state: 'leave', path: p, len: plen(p), t0: now, dur: clamp(plen(p) / 240, 2.5, 7) * 1000 * hSpeedK() });
+    hFree({ ...e.bth, key }); Object.assign(e, { state: 'leave', path: p, len: plen(p), t0: now, dur: clamp(plen(p) / 150, 4, 11) * 1000 * hSpeedK() });
   }
   for (const b of here) {
     let e = HB.disp.get(b.key);
     if (e) { e.b = b; if (e.state === 'leave') { HB.disp.delete(b.key); e = null; } else continue; }
     const bth = hBerth(b); bth.key = b.key;
     e = { b, bth, x: bth.x, y: bth.y, hd: bth.hd, state: 'berth' };
-    if (!HB.first) { const p = [...ch, [bth.x + bth.out[0] * 25, bth.y + bth.out[1] * 25], [bth.x, bth.y]]; Object.assign(e, { state: 'arrive', path: p, len: plen(p), t0: now, dur: clamp(plen(p) / 240, 2.5, 7) * 1000 * hSpeedK() }); }
+    if (!HB.first) { const p = [...ch, [bth.x + bth.out[0] * 25, bth.y + bth.out[1] * 25], [bth.x, bth.y]]; Object.assign(e, { state: 'arrive', path: p, len: plen(p), t0: now, dur: clamp(plen(p) / 150, 4, 11) * 1000 * hSpeedK() }); }
     HB.disp.set(b.key, e);
   }
   for (const [key, e] of HB.disp) {
