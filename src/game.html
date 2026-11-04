@@ -5929,6 +5929,14 @@ function shipHTML(id) {
   <p class="desc">${esc(T.blurb)}</p>
   <p class="fine">${SHIP_NOTES[v.cargo] || ''}</p>`;
 }
+// How far a tug would sail to reach a ship: round the islands and peninsulas, not as the crow flies (kept for a while,
+// for each few km of the tug's position)
+const JOB_KM = new Map();
+function jobKm(t, j) {
+  const key = j.id + ':' + Math.round(t.x / 3) + ',' + Math.round(t.y / 3); let km = JOB_KM.get(key);
+  if (km == null) { const p = computePath([t.x, t.y], j.pos); km = p ? p.len : Math.hypot(t.x - j.pos[0], t.y - j.pos[1]) * 1.25; JOB_KM.set(key, km); if (JOB_KM.size > 300) JOB_KM.delete(JOB_KM.keys().next().value); }
+  return km;
+}
 function jobHTML(j) {
   if (!j) return null;
   const tugs = S.tugs.filter(t => t.owner === 'p' && !isFish(t) && !isWarp(t) && !MODELS[t.model].hooker && !t.jobTow && S.season);
@@ -5941,8 +5949,11 @@ function jobHTML(j) {
     : rival ? `<p class="status" style="color:var(--rival)">${esc(coName(rival.co))}'s ${esc(rival.name)} is racing for her!</p>` : '<p class="fine">First tug alongside gets the job. Tugs from the other companies may race you for it.</p>'}
   <h3>Send a tug</h3>
   ${j.state !== 'open' ? '' : tugs.length ? `<ul class="list">${tugs.map(t => {
-    const ok = canTake(t, j), eta = Math.hypot(t.x - j.pos[0], t.y - j.pos[1]) * 1.25 / Math.max(10, tugSpeed(t));
-    return `<li><button class="item" data-act="sendJob" data-tug="${t.id}" data-job="${j.id}" ${ok && t.job !== j.id ? '' : 'disabled'}>${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${t.state === 'laid' ? 'Laid up. She goes back to her moorings after. ' : ''}${!ok ? 'Too small for salvage' : t.job === j.id ? 'On her way' : `About ${eta < 1 ? 'a day' : Math.ceil(eta) + ' days'} away${t.tow.length ? ', with her tow' : ''}`}</small></span><span class="side">${ok && t.job !== j.id ? 'Send' : ''}</span></button></li>`;
+    const km = jobKm(t, j);
+    return { t, km, eta: km / Math.max(10, tugSpeed(t)), ok: canTake(t, j) };
+  // nearest first, by how soon she could be alongside; the one already on her way at the top, any too small at the end
+  }).sort((a, b) => (b.t.job === j.id) - (a.t.job === j.id) || b.ok - a.ok || a.eta - b.eta).map(({ t, km, eta, ok }) => {
+    return `<li><button class="item" data-act="sendJob" data-tug="${t.id}" data-job="${j.id}" ${ok && t.job !== j.id ? '' : 'disabled'}>${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${t.state === 'laid' ? 'Laid up. She goes back to her moorings after. ' : ''}${!ok ? 'Too small for salvage' : t.job === j.id ? 'On her way' : `${Math.max(1, Math.round(km / 5) * 5)} km, about ${eta < 1 ? 'a day' : Math.ceil(eta) + ' days'} away${t.tow.length ? ', with her tow' : ''}`}</small></span><span class="side">${ok && t.job !== j.id ? 'Send' : ''}</span></button></li>`;
   }).join('')}</ul>` : '<p class="fine">You have no towing tugs free.</p>'}`;
 }
 const DEST = { toronto: 'Toronto', eastOttawa: 'Ottawa and Montreal', eastGT: 'Kingston and Montreal', eastCA: 'Ottawa', northCP: 'the West', northCN: 'the North',
@@ -8123,7 +8134,7 @@ function start(data) {
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
 }
-window.__tugboatMap = MAP; window.__tugboat = { landTick, landPal, WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
+window.__tugboatMap = MAP; window.__tugboat = { spawnJob, landTick, landPal, WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
     for (const type of ['schooner2', 'schooner3', 'steambarge', 'laker', 'canaller', 'passenger']) { [0, .8, 1.57, 2.6, 3.14, -1.57].forEach((a, i) => { const v = { type, name: type, lenFt: type === 'laker' ? 500 : type === 'canaller' ? 255 : type === 'steambarge' ? 190 : 130, loaded: i % 2 === 0, cargo: 'lumber', hue: '#2f3a40' }; const L = shipLen(v); ctx.save(); ctx.translate(60 + i * 110, y); ctx.scale(scale / 2, scale / 2); ctx.rotate(a); drawShipBody(v, L, a, 0, false); ctx.restore(); }); y += 95; } ctx = keep; }, addShip, shipType, seaPath, shipsDay, advance(days) { for (let d = 0; d < days; d += .05) { simAdvance(.05); moveTraffic(.05); if (Math.floor(S.day) !== lastTrafficDay) { lastTrafficDay = Math.floor(S.day); trafficDay(); } } }, vehicles,  get WET() { return WET; }, CELL, isWet, NETPOS, RAIL_SEGS, ROAD_SEGS, ll, homeView, renderHI, clampCam, get fling() { return fling; }, get gesture() { return gesture; }, get HI() { return HI; }, get S() { return S; }, simAdvance, startSeason, endSeason, newGame, PORT, GROUND, MODELS, getPath, nodePos, deliveryValue, distKm, buyTug, saveRoute, assignGround, netWorth, ui, select, cam, get GW() { return GW; }, get GH() { return GH; }, get WATER() { return WATER; } };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
