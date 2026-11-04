@@ -301,6 +301,14 @@ table.cargo td.n{text-align:right}
   padding:7px 12px;display:flex;gap:10px;align-items:baseline;cursor:pointer;box-shadow:0 6px 18px -12px var(--shadow)}
 #ticker time{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);font-weight:700;white-space:nowrap}
 #ticker span{font-family:var(--font-chart);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+#adviceBtn{position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;min-height:40px;padding:0 8px 0 14px;background:var(--surface);color:var(--ink);border:1px solid var(--magenta);border-radius:20px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px -10px var(--shadow)}
+#adviceBtn b{min-width:24px;height:24px;border-radius:12px;background:var(--magenta);color:var(--on-magenta);display:grid;place-items:center;font-size:13px;padding:0 6px}
+#adviceBtn[hidden]{display:none}
+.advice{list-style:none;margin:8px 0 4px;padding:0;display:flex;flex-direction:column;gap:8px}
+.advice li{border:1px solid var(--rule);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.advice li.urgent{border-left:4px solid var(--magenta)}
+.advice li p{margin:0}
+.advice li .btn{width:auto;min-height:40px;padding:0 16px}
 #toasts{position:absolute;left:0;bottom:52px;display:flex;flex-direction:column-reverse;gap:6px;max-width:min(380px,100%);pointer-events:none}
 .toast{background:var(--ink);color:var(--surface);border-radius:4px;padding:8px 12px;font-size:14px;font-weight:500;box-shadow:0 8px 20px -10px var(--shadow);animation:toastIn .25s ease-out}
 .toast.bad{background:var(--bad);color:#fff}
@@ -417,6 +425,7 @@ table.cargo td.n{text-align:right}
   <div id="mapArea">
     <div id="banner" hidden></div>
     <div id="harbourBar" hidden><button class="btn" data-act="exitHarbour" aria-label="Back to the map">‹ Map</button><div><b id="hbTitle"></b><small id="hbNote">Today's street map, grown back to its size that year. Map data © OpenStreetMap contributors, via Overture Maps.</small></div></div>
+    <button id="adviceBtn" data-act="advice" hidden><span>What next?</span><b id="adviceN"></b></button>
     <div id="toasts" aria-live="polite"></div>
     <div id="ticker" data-act="newsAll" role="button" tabindex="0"><time id="tickDate"></time><span id="tickText"></span></div>
     <div id="zoomCtl"><button data-act="zoom" data-v="1" aria-label="Zoom in">+</button><button data-act="zoom" data-v="-1" aria-label="Zoom out">−</button><button data-act="home" aria-label="Show the whole map"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button></div>
@@ -5102,6 +5111,69 @@ function contractHTML(id) {
     <p class="fine">${fish ? `Her catch counts toward the contract when she lands it at ${PORT[k.to].name}.` : `"Put her on it" gives her the route ${runText(k)}. Her captain carries the contract cargo first, as long as the contract still wants it.`}</p>`
     : `<p class="fine">You have no ${fish ? 'fish tugs' : 'towing tugs'}. Buy one at the shipyard.</p>`}`;
 }
+/* ---------- What next?: the office's suggestions from the state of the game, most pressing first. A button on the map
+   shows when something wants doing (a boat with nothing to do, an offer to answer, an overdraft); the menu always has it. ---------- */
+const ADVICE_OFF = 'tugboat-advice-off';
+const adviceOff = () => { try { return localStorage.getItem(ADVICE_OFF) === '1'; } catch (e) { return false; } };
+function adviceList() {
+  const out = [], add = (pri, text, act, label, id) => out.push({ pri, text, act, label, id });
+  if (!S || S.over) return out;
+  const y = yearOf(S.day), mine = S.tugs.filter(t => t.owner === 'p'), towers = mine.filter(t => !isFish(t) && !isWarp(t));
+  if (!S.season) {
+    add(5, `Navigation is closed for the winter. Buy boats now and they are ready in the spring; fit out for ${S.year + 1} when you are ready.`, 'backWinter', 'The winter card');
+    return out;
+  }
+  if (S.cash < 0) add(5, `You are overdrawn by ${money(-S.cash)}. The bank charges 10% a year on an overdraft and 6% on a loan.`, 'bank', 'The bank');
+  const off = offeredContracts();
+  if (off.length) add(4, off.length === 1 ? `An offer is waiting for your answer: ${off[0].cust} want ${qtyText(off[0])} ${off[0].from ? `from ${runText(off[0])}` : runText(off[0])}.` : `${off.length} contract offers are waiting for your answer.`, 'adviceOffers', off.length === 1 ? 'See the offer' : 'See the offers');
+  const busy = t => t.job || t.jobTow || t.layup || t.state === 'laid' || t.refit;
+  for (const t of towers) if (t.route.length < 2 && !t.harbour && !busy(t))
+    add(4, `${t.name} has no route, so she earns nothing. Give her two to four ports to loop${harbourOpen() ? ', or station her in a busy port for harbour work' : ''}.`, 'adviceTug', 'Set her route', t.id);
+  for (const t of mine) if (isFish(t) && !t.ground && !busy(t)) add(4, `${t.name} has no fishing grounds. Choose some, and she lands her catch at the nearest fish house.`, 'adviceFish', 'Choose her grounds', t.id);
+  if (S.weather.warn) for (const t of mine) if (t.stance === 'bold' && (t.state === 'sail' || t.state === 'work')) add(4, `A gale is forecast and ${t.name} has Bold orders, so she will stay out in it.`, 'adviceSee', 'See her', t.id);
+  for (const k of activeContracts()) {
+    const need = needOf(k), due = k.due || S.seasonClose; if (!need || due - S.day > 25) continue;
+    if (!mine.some(t => isFish(t) ? k.c === 'fish' && t.home === k.to : t.route.includes(k.to) && (!k.from || t.route.includes(k.from))))
+      add(4, `${ucf(k.cust)} still want ${need} ${k.c === 'fish' ? 'tons' : need === 1 ? 'load' : 'loads'} ${dueText(k)}, and none of your boats works that run. Short loads cost ${money(k.pen)} each.`, 'adviceContract', 'See the contract', k.id);
+  }
+  const into = S.day - (S.seasonOpen || S.day);
+  if (into > 40) for (const t of mine) {
+    if (busy(t) || t.bought > S.day - 40 || isWarp(t)) continue;
+    if ((t.earn || 0) < (t.cost || 0) * .8) add(3, `${t.name} has earned ${money(t.earn || 0)} and cost ${money(t.cost || 0)} this season. ${isFish(t) ? 'Try other grounds, or land at a railway town, where fish pays best.' : `Try a route with something to carry on every leg: tap a port to see what it ships and what it wants${harbourOpen() ? ', or try her on harbour work' : ''}.`}`, 'adviceSee', 'See her', t.id);
+  }
+  for (const t of mine) if (isFish(t) && t.ground && S.grounds[t.ground] && S.grounds[t.ground].stock / GROUND[t.ground].K < .35)
+    add(3, `${GROUND[t.ground].name} is fished down to ${Math.round(S.grounds[t.ground].stock / GROUND[t.ground].K * 100)}%. ${t.name} would catch more on other grounds, and these would recover.`, 'adviceFish', 'Choose new grounds', t.id);
+  for (const t of mine) if (t.hull < 40 && !busy(t)) add(3, `${t.name}'s hull is down to ${Math.round(t.hull)}%, and she is likelier to be lost in a gale. She mends while she lies in port.`, 'adviceSee', 'See her', t.id);
+  for (const t of mine) if (t.state === 'laid' && t.layup && !t.refit) add(2, `${t.name} is laid up at ${PORT[t.layup].name}. Fit her out when you want her working again.`, 'adviceSee', 'See her', t.id);
+  const buyable = Object.entries(MODELS).filter(([, m]) => forSale(m, y) && m.kind !== 'fish' && !m.warp && !m.sail && S.cash >= m.price + 3000).sort((a, b) => b[1].price - a[1].price);
+  if (buyable.length && mine.length < 14) add(2, `You have ${money(S.cash)}: enough for a ${buyable[0][1].name.toLowerCase()} (${money(buyable[0][1].price)}) and some to spare. A tug on a good route pays for herself in a few seasons.`, 'shipyard', 'The shipyard');
+  if (y >= 1900 && towers.length && !towers.some(t => t.route.some(p => supplyRate(p, 'grain') > 0)))
+    add(1, `Grain waits at the elevators (${listAnd(Object.keys(ELEVATORS).filter(p => supplyRate(p, 'grain') > 0).map(p => PORT[p].name))}) for the mills and towns round the bay. None of your routes calls at one.`);
+  if (S.loans > 0 && S.cash > S.loans + 15000) add(1, `You owe the bank ${money(S.loans)} at 6% and have ${money(S.cash)} in hand. Paying it off saves the interest.`, 'bank', 'The bank');
+  for (const t of mine) if (ageOf(t) > 28 && !isWarp(t)) { add(1, `${t.name} is ${Math.floor(ageOf(t))} years old: she burns more and suffers more in a gale every year. Think about replacing her.`, 'adviceSee', 'See her', t.id); break; }
+  return out.sort((a, b) => b.pri - a.pri);
+}
+function adviceHTML() {
+  const list = adviceList(), shown = list.slice(0, 6), off = adviceOff();
+  return `<div class="rules"><span>${fmtDate(S.day)}</span><span>From the office</span></div>
+  <h2>What next?</h2>
+  ${shown.length ? `<ul class="advice">${shown.map(a => `<li class="${a.pri >= 3 ? 'urgent' : ''}"><p>${esc(a.text)}</p>${a.act ? `<button class="btn" data-act="${a.act}"${a.id ? ` data-id="${a.id}"` : ''}>${esc(a.label)}</button>` : ''}</li>`).join('')}</ul>${list.length > shown.length ? `<p class="fine">And ${list.length - shown.length} smaller thing${list.length - shown.length === 1 ? '' : 's'} once these are done.</p>` : ''}`
+    : `<p class="desc">Nothing needs you just now: your boats are all at work. Speed the clock up and look in again later, or tap a port to see what pays there.</p>`}
+  <h3>The What next? button</h3>
+  <div class="seg" role="group" aria-label="Show the What next? button on the map"><button data-act="adviceBtn" data-v="1" aria-pressed="${!off}">Show it</button><button data-act="adviceBtn" data-v="0" aria-pressed="${off}">Hide it</button></div>
+  <p class="fine">It appears at the top of the map when something wants doing. This card is always in the menu.</p>
+  <div class="row"><button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
+}
+let adviceSig = '';
+function adviceTick() {
+  const el = $('#adviceBtn'); if (!el) return;
+  const urgent = inPlay && S && S.season && !S.over && !tour && !HB && !ui.mode && !adviceOff() ? adviceList().filter(a => a.pri >= 3) : [];
+  const sig = urgent.length ? String(urgent.length) : '';
+  if (sig === adviceSig) return; adviceSig = sig;
+  el.hidden = !urgent.length;
+  if (urgent.length) { $('#adviceN').textContent = urgent.length; el.setAttribute('aria-label', `What next? ${urgent.length} thing${urgent.length === 1 ? ' wants' : 's want'} doing`); }
+}
+setInterval(adviceTick, 1200);
 function offersHTML() {
   const off = offeredContracts(); if (!off.length) return null;
   return `<div class="rules"><span>${fmtDate(S.day)}</span><span>Letters at the office</span></div>
@@ -6602,7 +6674,7 @@ function menuHTML() {
   ${soundMenuHTML()}
   ${gfxMenuHTML()}
   <h3>How to play</h3>
-  <div class="row"><button class="btn primary wide" data-act="tour">Show me how to play</button></div>
+  <div class="row"><button class="btn primary wide" data-act="tour">Show me how to play</button><button class="btn wide" data-act="advice">What should I do next?</button></div>
   <ol class="how">
     <li>Tap a tug, then <b>Set a route</b> and tap two to four ports. It loops them, carrying whatever pays.</li>
     <li>Tap a port to see what it ships (<b>Waiting</b>) and what it pays for (<b>Wanted here</b>). Deliver too much of one thing and the price falls until it recovers.</li>
@@ -6642,6 +6714,13 @@ const ACTS = {
   kAccept: el => { const k = contracts().find(k => k.id === el.dataset.id); if (acceptContract(k)) toast(`Signed with ${k.cust}.`); if (el.dataset.modal) { const h = offersHTML(); if (h) showModal(h); else closeModal(); } ui.panelDirty = true; },
   history: el => openHistory(!!el.closest('#modalBody')),
   season: () => showModal(seasonHTML()),
+  advice: () => showModal(adviceHTML()),
+  adviceBtn: el => { try { if (el.dataset.v === '1') localStorage.removeItem(ADVICE_OFF); else localStorage.setItem(ADVICE_OFF, '1'); } catch (e) {} adviceSig = '-'; adviceTick(); showModal(adviceHTML()); },
+  adviceOffers: () => { const h = offersHTML(); if (h) showModal(h); else closeModal(); },
+  adviceContract: el => { closeModal(); select({ t: 'contract', id: el.dataset.id }); },
+  adviceTug: el => { const t = S.tugs.find(t => t.id === el.dataset.id); closeModal(); if (t) { select({ t: 'tug', id: t.id }); startRouteEdit(t); } },
+  adviceFish: el => { const t = S.tugs.find(t => t.id === el.dataset.id); closeModal(); if (t) { select({ t: 'tug', id: t.id }); ui.mode = { type: 'ground', tugId: t.id }; ui.panelDirty = true; } },
+  adviceSee: el => { closeModal(); select({ t: 'tug', id: el.dataset.id }); },
   newsYard: () => { ui.buyName = null; showModal(shipyardHTML()); },
   newsTug: el => { closeModal(); select({ t: 'tug', id: el.dataset.id }); },
   seasonBoat: el => { closeModal(); select({ t: 'tug', id: el.dataset.id }); },
