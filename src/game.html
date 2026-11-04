@@ -2729,7 +2729,7 @@ function cloudSave(force, leaving) {
   if (!BOARD.on || !inPlay || !S || navigator.onLine === false) return;
   const now = Date.now(), sig = S.gameId + ':' + Math.floor(S.day) + ':' + Math.round(S.cash);
   if (sig === CLOUD.sig || (!force && now - CLOUD.last < 5 * 60000) || (leaving && now - CLOUD.last < 45000)) return;
-  const body = JSON.stringify({ id: BOARD.id, game: S.gameId, when: gameWhen(S), year: S.year, company: S.company, worth: Math.round(netWorth()), data: JSON.stringify(S) });
+  const body = JSON.stringify({ id: BOARD.id, key: BOARD.key, game: S.gameId, when: gameWhen(S), year: S.year, company: S.company, worth: Math.round(netWorth()), data: JSON.stringify(S) });
   CLOUD.last = now; CLOUD.sig = sig;
   try { fetch('api/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: body.length < 60000 }).then(r => { if (!r.ok) CLOUD.sig = ''; }, () => { CLOUD.sig = ''; }); } catch (e) { CLOUD.sig = ''; }
 }
@@ -2759,48 +2759,25 @@ function savedGamesHTML(from) {
   <p class="fine">The last ${GAMES_MAX} games played in this browser are kept here, each where you last left it. The game saves itself every month, at the end of each season and when you put it away.</p>
   ${BOARD.on ? `<h3>Saved online</h3>
   <div id="cloudList"><p class="fine">Looking for your games online…</p></div>
-  <div class="row"><button class="btn wide" data-act="cloudFind" data-from="${from}">Find my game by my scoreboard name</button></div>
-  <p class="fine">Your last three games are also saved online, under your name on the scoreboard, every few minutes while you play. If this iPad has forgotten your game, or you're on another device, find your name and bring it back.</p>` : ''}
+  <p class="fine">This device's last three games are also saved online every few minutes while you play, locked to this device. If it loses a game, bring it back from here.</p>` : ''}
   <div class="row"><button class="btn wide ghost" data-act="${from === 'title' ? 'titleBack' : 'menu'}">Back</button></div>`;
 }
 // The games saved online under a player's id
 async function cloudGames(id) {
-  try { const r = await fetch('api/save?id=' + encodeURIComponent(id), { cache: 'no-store' }); if (!r.ok) return r.status === 503 ? { off: true } : null; return await r.json(); } catch (e) { return null; }
+  try { const r = await fetch('api/save?id=' + encodeURIComponent(id) + '&key=' + encodeURIComponent(BOARD.key), { cache: 'no-store' }); if (!r.ok) return r.status === 503 ? { off: true } : null; return await r.json(); } catch (e) { return null; }
 }
-const cloudRows = (games, pid, name) => games.map(g => `<li><button class="item" data-act="cloudLoad" data-pid="${esc(pid)}" data-game="${esc(g.game)}" data-name="${esc(name || '')}" ${inPlay && S && S.gameId === g.game && pid === BOARD.id ? 'disabled' : ''}>${GAME_GLYPH()}<span><b>${esc(g.company || 'A company')}</b><small>${esc(g.when || String(g.year))}${g.worth != null ? ` · worth ${money(g.worth)}` : ''} · saved ${boardAgo(Date.now() - g.at)}</small></span><span class="side">${inPlay && S && S.gameId === g.game && pid === BOARD.id ? 'Playing now' : 'Play'}</span></button></li>`).join('');
+const cloudRows = games => games.map(g => { const cur = inPlay && S && S.gameId === g.game;
+  return `<li><button class="item" data-act="cloudLoad" data-game="${esc(g.game)}" ${cur ? 'disabled' : ''}>${GAME_GLYPH()}<span><b>${esc(g.company || 'A company')}</b><small>${esc(g.when || String(g.year))}${g.worth != null ? ` · worth ${money(g.worth)}` : ''} · saved ${boardAgo(Date.now() - g.at)}</small></span><span class="side">${cur ? 'Playing now' : 'Play'}</span></button></li>`; }).join('');
 async function fillCloudList() {
   const data = await cloudGames(BOARD.id), el = $('#cloudList'); if (!el) return;
   el.innerHTML = !data ? '<p class="fine">Online saves need a connection.</p>' : data.off ? '<p class="fine">Online saving isn\'t switched on.</p>'
-    : data.games.length ? `<ul class="list">${cloudRows(data.games, BOARD.id, BOARD.name)}</ul>` : `<p class="fine">Nothing saved online yet as ${esc(BOARD.name)}.</p>`;
+    : data.games.length ? `<ul class="list">${cloudRows(data.games)}</ul>` : '<p class="fine">Nothing saved online from this device yet.</p>';
 }
-// Finding your game by your name on the scoreboard
-async function cloudFind(from) {
-  showModal(`<h2>Find my game</h2><p class="fine">Fetching the scoreboard…</p>`);
-  let data = null; try { const r = await fetch('api/board', { cache: 'no-store' }); data = r.ok ? await r.json() : null; } catch (e) { /* offline */ }
-  if (!ui.modalOpen || !/Find my game/.test(($('#modalBody h2') || {}).textContent || '')) return;
-  const ps = (data && data.players || []).slice().sort((a, b) => (b.last || 0) - (a.last || 0));
-  showModal(`<div class="rules"><span>Tugboat Tycoon</span><span>Saved online</span></div>
-  <h2>Find my game</h2>
-  ${!data ? '<p class="desc">This needs a connection. Try again when you\'re online.</p>' : ps.length ? `<p class="desc">Which one is you?</p><ul class="list">${ps.map(p => `<li><button class="item" data-act="cloudWho" data-pid="${esc(p.id)}" data-name="${esc(p.name || '')}" data-from="${from}">${PERSON_GLYPH}<span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">This device</span>' : ''}</b><small>${esc(p.company || '')}${p.year ? `, ${p.month ? esc(p.month) + ' ' : ''}${p.year}` : ''} · last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${/^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}` : ''}</small></span><span class="side">›</span></button></li>`).join('')}</ul>` : '<p class="desc">No one is on the scoreboard yet.</p>'}
-  <div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="${from}">Back</button></div>`);
-}
-async function cloudWho(pid, name, from) {
-  showModal(`<h2>${esc(name || 'Your')} games</h2><p class="fine">Looking…</p>`);
-  const data = await cloudGames(pid);
-  if (!ui.modalOpen) return;
-  const me = pid === BOARD.id;
-  showModal(`<div class="rules"><span>Saved online</span><span>${esc(name || '')}</span></div>
-  <h2>${esc(name || 'Their')}'s games</h2>
-  ${!data ? '<p class="desc">This needs a connection. Try again when you\'re online.</p>' : data.games && data.games.length ? `<ul class="list">${cloudRows(data.games, pid, name)}</ul>
-  ${me ? '' : `<p class="fine">Playing one of these makes this device ${esc(name)} on the scoreboard, as it was where the game was played. Only bring back your own games.</p>`}` : `<p class="desc">${esc(name || 'They')} has no games saved online yet. Games are saved online from now on, while they play.</p>`}
-  <div class="row"><button class="btn wide ghost" data-act="cloudFind" data-from="${from}">Back</button></div>`);
-}
-async function cloudLoad(pid, game, name) {
-  const data = await cloudGames(pid), g = data && data.games && data.games.find(x => x.game === game);
+async function cloudLoad(game) {
+  const data = await cloudGames(BOARD.id), g = data && data.games && data.games.find(x => x.game === game);
   let s = null; try { s = g && JSON.parse(g.data); } catch (e) { /* unreadable */ }
   if (!s || s.v !== 1) { toast('That game could not be brought back.', true); return; }
   if (inPlay) saveGame(true);
-  if (pid !== BOARD.id) { BOARD.id = pid; if (name) BOARD.name = name; BOARD.named = true; boardSave(); }
   S = s; afterLoad(); ui.queue = []; closeModal(); beginPlay(); boardNow(); toast(`Back to ${S.company}, ${gameWhen(S)}.`);
 }
 /* ---------- Moving a game between devices: a small file, sent any way the device can send a file ---------- */
@@ -6184,8 +6161,7 @@ function titleHTML(saved) {
   </ol>
   <p class="fine">Pinch, scroll or double-tap to zoom in, drag to move around, and tap anything on the map. The corner button brings back the whole bay. The years roll on for as long as you like to play.</p>
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="titleNew">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
-  ${!saved && BOARD.on ? '<div class="row"><button class="btn wide" data-act="savedGames" data-from="title">Bring back a saved game</button></div>'
-    : savedCount() > 1 || BOARD.on ? `<div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="title">Saved games${savedCount() ? ` (${savedCount()})` : ''}</button></div>` : ''}
+  ${savedCount() > 1 || (BOARD.on && BOARD.known) || (!saved && savedCount()) ? `<div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="title">Saved games${savedCount() ? ` (${savedCount()})` : ''}</button></div>` : ''}
   ${playNotice()}${homeHint()}
   ${BOARD.on ? '<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button></div>' : ''}`;
 }
@@ -6326,13 +6302,15 @@ function toggleFull() {
    the board (functions/api/board.js, kept in Cloudflare KV) shows everyone, best first, with when they last played.
    ===================================================================== */
 const BOARD = { on: !inClaude && !window.__noBoard, id: '', name: '', named: false, mark: 0, started: false };
-try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '', named: !!v.named }); } catch (e) { /* storage blocked */ }
-const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name, named: BOARD.named })); } catch (e) { /* storage blocked */ } };
+try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '', named: !!v.named, key: v.key || '', known: true }); } catch (e) { /* storage blocked */ }
+const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name, named: BOARD.named, key: BOARD.key })); } catch (e) { /* storage blocked */ } };
 // a name for the board until the player picks one: a first name and a surname of the bay's settlers
 const BOARD_FIRST = ['Ada', 'Agnes', 'Albert', 'Alice', 'Angus', 'Annie', 'Archie', 'Bella', 'Clara', 'Duncan', 'Edith', 'Elsie', 'Ewan', 'Flora', 'George', 'Grace', 'Hamish', 'Harriet', 'Hugh', 'Isabel', 'Jean', 'Kate', 'Lachlan', 'Lottie', 'Malcolm', 'Neil', 'Nell', 'Owen', 'Peggy', 'Rose', 'Silas', 'Violet', 'Walter'];
 const BOARD_LAST = ['Barr', 'Boyd', 'Cameron', 'Campbell', 'Douglas', 'Fraser', 'Gordon', 'Grant', 'Hamilton', 'Kerr', 'MacKay', 'McLean', 'Morrison', 'Munro', 'Murray', 'Paterson', 'Reid', 'Ross', 'Shaw', 'Sinclair', 'Stewart', 'Wallace'];
 const boardRandomName = () => { const r = crypto.getRandomValues(new Uint16Array(2)); return `${BOARD_FIRST[r[0] % BOARD_FIRST.length]} ${BOARD_LAST[r[1] % BOARD_LAST.length]}`; };
 if (!BOARD.id) BOARD.id = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => (b % 36).toString(36)).join('');
+// the key that locks this device's online saves: it goes only to the save server, and isn't on the board
+if (!BOARD.key) BOARD.key = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => (b % 36).toString(36)).join('');
 if (!BOARD.name) BOARD.name = boardRandomName();
 boardSave();
 const deviceName = () => { const u = navigator.userAgent; return /iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'computer'; };
@@ -6668,9 +6646,7 @@ const ACTS = {
   save: () => { saveGame(false); closeModal(); },
   load: () => { const s = loadSaved(); if (s) { S = s; afterLoad(); beginPlay(); boardNow(); toast(`Loaded your ${S.year} game.`); } closeModal(); },
   savedGames: el => { showModal(savedGamesHTML(el.dataset.from)); if (BOARD.on) fillCloudList(); },
-  cloudFind: el => cloudFind(el.dataset.from),
-  cloudWho: el => cloudWho(el.dataset.pid, el.dataset.name, el.dataset.from),
-  cloudLoad: el => { el.disabled = true; cloudLoad(el.dataset.pid, el.dataset.game, el.dataset.name); },
+  cloudLoad: el => { el.disabled = true; cloudLoad(el.dataset.game); },
   titleBack: () => showModal(titleHTML(loadSaved())),
   titleNew: () => { const s = loadSaved(); showModal(`<h2>Start a new game?</h2><p class="desc">${s ? `Your ${esc(s.company)} game (${s.year}) stays saved. You can go back to it any time from Saved games, on this screen or in the menu.` : ''}</p>
     <div class="row"><button class="btn primary wide" data-act="newGameYes">Start a new game in 1870</button><button class="btn wide" data-act="titleBack">Back</button></div>`); },
