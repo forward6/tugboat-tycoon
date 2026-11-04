@@ -267,6 +267,8 @@ table.cargo td.n{text-align:right}
 .riverpick select{font:inherit;font-size:15px;padding:8px;border:1px solid var(--rule);border-radius:4px;background:var(--surface);color:var(--ink)}
 .item small.oncontract{color:var(--magenta);font-weight:700}
 .item .kline{display:block;margin-top:5px;max-width:260px}
+.placerow{align-items:center;justify-content:space-between;flex-wrap:nowrap}
+.placerow .fine{flex:1}
 .fleetline{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;margin-top:4px}
 .fleetline span{display:inline-flex;align-items:center;gap:1px;font-size:12.5px;font-weight:700;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .fleetline svg{width:22px;height:22px;display:block}
@@ -6302,8 +6304,8 @@ function toggleFull() {
    the board (functions/api/board.js, kept in Cloudflare KV) shows everyone, best first, with when they last played.
    ===================================================================== */
 const BOARD = { on: !inClaude && !window.__noBoard, id: '', name: '', named: false, mark: 0, started: false };
-try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '', named: !!v.named, key: v.key || '', known: true }); } catch (e) { /* storage blocked */ }
-const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name, named: BOARD.named, key: BOARD.key })); } catch (e) { /* storage blocked */ } };
+try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '', named: !!v.named, key: v.key || '', known: true, hidePlace: !!v.hidePlace }); } catch (e) { /* storage blocked */ }
+const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name, named: BOARD.named, key: BOARD.key, hidePlace: !!BOARD.hidePlace })); } catch (e) { /* storage blocked */ } };
 // a name for the board until the player picks one: a first name and a surname of the bay's settlers
 const BOARD_FIRST = ['Ada', 'Agnes', 'Albert', 'Alice', 'Angus', 'Annie', 'Archie', 'Bella', 'Clara', 'Duncan', 'Edith', 'Elsie', 'Ewan', 'Flora', 'George', 'Grace', 'Hamish', 'Harriet', 'Hugh', 'Isabel', 'Jean', 'Kate', 'Lachlan', 'Lottie', 'Malcolm', 'Neil', 'Nell', 'Owen', 'Peggy', 'Rose', 'Silas', 'Violet', 'Walter'];
 const BOARD_LAST = ['Barr', 'Boyd', 'Cameron', 'Campbell', 'Douglas', 'Fraser', 'Gordon', 'Grant', 'Hamilton', 'Kerr', 'MacKay', 'McLean', 'Morrison', 'Munro', 'Murray', 'Paterson', 'Reid', 'Ross', 'Shaw', 'Sinclair', 'Stewart', 'Wallace'];
@@ -6318,7 +6320,7 @@ function boardReport(start, leaving) {
   if (!BOARD.on || !S || navigator.onLine === false) return;
   const t = performance.now(), minutes = BOARD.mark ? Math.min(15, (t - BOARD.mark) / 60000) : 0; BOARD.mark = leaving ? 0 : t;
   const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, month: S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter', worth: Math.round(nw), title: titleFor(nw),
-    boats: S.tugs.filter(x => x.owner === 'p').length, fleet: S.tugs.filter(x => x.owner === 'p').reduce((a, t) => (a[t.model] = (a[t.model] || 0) + 1, a), {}), device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
+    hidePlace: !!BOARD.hidePlace, boats: S.tugs.filter(x => x.owner === 'p').length, fleet: S.tugs.filter(x => x.owner === 'p').reduce((a, t) => (a[t.model] = (a[t.model] || 0) + 1, a), {}), device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
   try {
     if (leaving && navigator.sendBeacon) navigator.sendBeacon('api/board', new Blob([body], { type: 'application/json' }));
     else fetch('api/board', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
@@ -6333,8 +6335,15 @@ function boardStart() {
 }
 const boardAgo = ms => { const m = ms / 60000; return m < 2 ? 'just now' : m < 60 ? `${Math.round(m)} minutes ago` : m < 120 ? 'an hour ago' : m < 1440 ? `${Math.round(m / 60)} hours ago` : m < 2880 ? 'yesterday' : `${Math.round(m / 1440)} days ago`; };
 const playedText = min => min < 1 ? 'a few minutes' : min < 60 ? `${Math.round(min)} min` : `${Math.floor(min / 60)} h ${Math.round(min % 60)} min`;
+// Where a player plays from, roughly: the city, region and country of their internet connection, as Cloudflare places it
+const COUNTRY = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch (e) { return null; } })();
+function placeText(pl) {
+  if (!pl || !(pl.city || pl.country)) return '';
+  let country = pl.country || ''; try { if (COUNTRY && /^[A-Z]{2}$/.test(country)) country = COUNTRY.of(country) || country; } catch (e) { /* the code will do */ }
+  return [pl.city, pl.region && pl.region !== pl.city ? pl.region : '', country].filter(Boolean).join(', ');
+}
 function boardNameHTML(where) {
-  return `<div class="namefield"><label for="playerName" class="fine">Your name on the scoreboard</label><input id="playerName" maxlength="30" value="${esc(BOARD.name)}" autocomplete="off"><button class="btn ghost" data-act="boardNameAnother" aria-label="Pick another name">Another</button><button class="btn" data-act="boardName" data-where="${where}">Save</button></div>`;
+  return `${BOARD.started ? `<div class="row placerow"><span class="fine">${BOARD.hidePlace ? 'Where you play from is hidden on the board.' : 'The board shows roughly where you play from, from your internet connection.'}</span><button class="btn ghost" data-act="boardPlace">${BOARD.hidePlace ? 'Show it' : 'Hide it'}</button></div>` : ''}<div class="namefield"><label for="playerName" class="fine">Your name on the scoreboard</label><input id="playerName" maxlength="30" value="${esc(BOARD.name)}" autocomplete="off"><button class="btn ghost" data-act="boardNameAnother" aria-label="Pick another name">Another</button><button class="btn" data-act="boardName" data-where="${where}">Save</button></div>`;
 }
 async function openBoard() {
   showModal(`<h2>Scoreboard</h2><p class="fine">Fetching the scoreboard…</p>`);
@@ -6367,11 +6376,11 @@ function boardHTML(data) {
     return `<li><div class="item board${p.id === BOARD.id ? ' you' : ''}"><span class="rank">${i + 1}</span><span><b>${esc(p.name || 'Someone')}${p.id === BOARD.id ? ' <span class="chip">You</span>' : ''}</b>
     <small>Best: ${esc(b.company || '')} · ${esc(b.title || '')}${b.year ? ` · ${when(b.month, b.year)}` : ''}</small>
     <small>${now}</small>${fleetLine(p, p.id === BOARD.id)}
-    <small>Last played ${boardAgo(data.now - p.last)}${p.device ? ` on ${p.app ? 'the' : /^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}${p.app ? ' home screen' : ''}` : ''} · ${playedText(p.minutes || 0)} in all · ${games} game${games === 1 ? '' : 's'}</small></span>
+    <small>Last played ${boardAgo(data.now - p.last)}${placeText(p.place) ? ` near ${esc(placeText(p.place))},` : ''}${p.device ? ` on ${p.app ? 'the' : /^[AEIOUi]/.test(p.device) ? 'an' : 'a'} ${esc(p.device)}${p.app ? ' home screen' : ''}` : ''} · ${playedText(p.minutes || 0)} in all · ${games} game${games === 1 ? '' : 's'}</small></span>
     <span class="side">${money(b.worth || 0)}<small>best</small></span></div></li>`;
   };
   return `${head}${ps.length ? `<ul class="list">${ps.map(row).join('')}</ul>` : '<p class="desc">No one has played yet.</p>'}
-  <p class="fine">Ranked by each player's best game: the most any of their companies has been worth. Starting a new game never lowers it. The little boats are the fleet in the game they're playing now. A game reports in when it starts and every few minutes while it's open.</p>
+  <p class="fine">Ranked by each player's best game: the most any of their companies has been worth. Starting a new game never lowers it. The little boats are the fleet in the game they're playing now. Where they play from is roughly where their internet connection is, unless they hide it. A game reports in when it starts and every few minutes while it's open.</p>
   ${boardNameHTML('board')}${close}`;
 }
 /* ---------- The bay's history, 1870 to today: real events on and around Georgian Bay, and what shaped it ----------
@@ -6562,6 +6571,7 @@ const ACTS = {
   players: () => openPlayers(),
   board: () => openBoard(),
   boardNameAnother: () => { const i = $('#playerName'); if (i) i.value = boardRandomName(); },
+  boardPlace: () => { BOARD.hidePlace = !BOARD.hidePlace; boardSave(); boardReport(); toast(BOARD.hidePlace ? 'Where you play from is now hidden.' : 'The board will show roughly where you play from.'); setTimeout(openBoard, 400); },
   boardName: el => { const i = $('#playerName'); BOARD.name = (i ? i.value : '').trim().slice(0, 30) || boardRandomName(); BOARD.named = true; boardSave(); toast(BOARD.name ? `Saved. You're ${BOARD.name} on the scoreboard.` : 'Saved.'); if (BOARD.started) boardReport();
     if (el.dataset.where === 'title') showModal(titleHTML(loadSaved())); else openBoard(); },
   pvFit: () => pvFit(),
