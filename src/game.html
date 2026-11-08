@@ -331,6 +331,9 @@ table.cargo td.n{text-align:right}
 .sheet h1{font-family:var(--font-display);font-weight:400;font-size:clamp(40px,8vw,64px);line-height:.95;margin:0;letter-spacing:.01em;text-wrap:balance}
 .sheet .sub{font-family:var(--font-chart);font-style:italic;font-size:19px;margin:0;color:var(--ink-2)}
 .sheet p{margin:0}
+.sheet-top{position:sticky;top:-22px;z-index:2;margin:-22px -24px 0;padding:14px 16px 10px 24px;background:var(--surface);border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sheet-top .xclose{flex:none;width:44px;height:44px;min-width:44px;padding:0;display:grid;place-items:center}
+.sheet-top .xclose svg{width:20px;height:20px}
 .rules{border-top:3px double var(--ink);border-bottom:1px solid var(--ink);padding:4px 0;display:flex;justify-content:space-between;gap:12px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--ink-2)}
 .how{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .paper .mast{font-family:var(--font-display);font-size:clamp(26px,5vw,36px);text-align:center;line-height:1;margin:0}
@@ -420,7 +423,7 @@ table.cargo td.n{text-align:right}
       <button data-act="speed" data-v="3" aria-label="Fastest" aria-pressed="false"><svg viewBox="0 0 20 20" fill="currentColor"><path d="M0 5l7 5-7 5zM6.5 5l7 5-7 5zM13 5l7 5-7 5z"/></svg></button>
     </div>
     <button class="iconbtn" id="soundBtn" data-act="sound" aria-pressed="true" aria-label="Sound on. Tap to turn it off"></button>
-    <button class="iconbtn" data-act="menu" aria-label="Menu"><svg viewBox="0 0 20 20" fill="currentColor"><rect x="3" y="4" width="14" height="2" rx="1"/><rect x="3" y="9" width="14" height="2" rx="1"/><rect x="3" y="14" width="14" height="2" rx="1"/></svg></button>
+    <button class="iconbtn" data-act="menu" aria-label="Settings"><svg viewBox="0 0 20 20" fill="currentColor"><rect x="3" y="4" width="14" height="2" rx="1"/><rect x="3" y="9" width="14" height="2" rx="1"/><rect x="3" y="14" width="14" height="2" rx="1"/></svg></button>
     </div>
   </header>
   <div id="mapArea">
@@ -2849,13 +2852,13 @@ async function sendGame() {
   const text = JSON.stringify({ game: 'Tugboat Tycoon', saved: new Date().toISOString(), S }), name = saveName();
   const blob = new Blob([text], { type: 'application/json' }), file = typeof File === 'function' ? new File([blob], name, { type: 'application/json' }) : null;
   if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], title: `${S.company}, ${S.year}`, text: 'My Tugboat Tycoon game. Open the game on the other device, then Menu, Load a game from a file.' }); return; }
+    try { await navigator.share({ files: [file], title: `${S.company}, ${S.year}`, text: 'My Tugboat Tycoon game. Open the game on the other device, then Settings, Load a game from a file.' }); return; }
     catch (e) { if (e && e.name === 'AbortError') return; }
   }
   const cl = window.claude, dl = cl && typeof cl.use === 'function' ? await cl.use('downloads').catch(() => null) : null;
-  if (dl) { try { await dl.save({ filename: name, data: blob }); toast('Saved. Send the file to the other device, then load it there from the menu.'); } catch (e) { if (e && e.code !== 'declined') toast('The game file could not be saved here.', true); } return; }
+  if (dl) { try { await dl.save({ filename: name, data: blob }); toast('Saved. Send the file to the other device, then load it there from Settings.'); } catch (e) { if (e && e.code !== 'declined') toast('The game file could not be saved here.', true); } return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
-  toast('Saved. Send the file to the other device, then load it there from the menu.');
+  toast('Saved. Send the file to the other device, then load it there from Settings.');
 }
 let pendingGame = null;
 function pickGameFile() {
@@ -5323,7 +5326,7 @@ function adviceHTML() {
     : `<p class="desc">Nothing needs you just now: your boats are all at work. Speed the clock up and look in again later, or tap a port to see what pays there.</p>`}
   <h3>The What next? button</h3>
   <div class="seg" role="group" aria-label="Show the What next? button on the map"><button data-act="adviceBtn" data-v="1" aria-pressed="${!off}">Show it</button><button data-act="adviceBtn" data-v="0" aria-pressed="${off}">Hide it</button></div>
-  <p class="fine">It appears at the top of the map when something wants doing. This card is always in the menu.</p>
+  <p class="fine">It appears at the top of the map when something wants doing. This card is always in Settings.</p>
   <div class="row"><button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
 }
 let adviceSig = '';
@@ -6203,9 +6206,9 @@ const TOUR = [
     rect: () => { const h = [...document.querySelectorAll('#panel h3')].find(h => /^Contracts/.test(h.textContent)); return rectOf(h, h && h.nextElementSibling); },
     body: () => { const k = offeredContracts()[0]; return 'Customers offer contracts: so many loads a season from one port to another, at a better price than the market. Fall short and you pay a penalty on every missing load.<br><br>'
       + (k ? `Your first offer is here: ${esc(qtyText(k))} from ${esc(runText(k))}, the run ${esc(myTug().name)} already makes. After the tour, tap it and <b>Bid for it</b>.` : 'New offers come each spring, and now and then during the season.'); } },
-  { title: 'The menu',
+  { title: 'Settings',
     rect: () => rectOf($('[data-act="menu"]'), $('#soundBtn')),
-    body: () => 'Save and load your game here, send it to another device, or share how your company is doing with family and friends. The game also saves itself at the end of every season.<br><br>Beside it, the speaker turns the sound on and off. To see this tour again, open the menu and tap <b>Show me how to play</b>.' },
+    body: () => 'Save and load your game here, send it to another device, or share how your company is doing with family and friends. The game also saves itself at the end of every season.<br><br>Beside it, the speaker turns the sound on and off. To see this tour again, open Settings and tap <b>Show me how to play</b>.' },
   { title: 'Ready to sail', next: 'Start playing', last: true,
     enter: () => { select(null); flyTo(nodePos('p:collingwood'), cam.fitZ * 2.2); },
     body: () => `Tap <b>Start playing</b> and watch ${esc(myTug().name)} make her first run to Parry Sound.<br><br>A good start: let her earn on her route, then buy a second boat. Later you'll find harbour views of the railway towns (zoom right in), a stock exchange, and ninety years of real history.` },
@@ -6915,7 +6918,7 @@ function historyHTML(fromMenu) {
   <div class="tl-legend">${Object.values(TL_KINDS).map(([t, c]) => `<span style="--c:var(${c})"><i></i>${esc(t)}</span>`).join('')}</div>
   <div class="tl-card" id="tlCard" aria-live="polite"></div>
   <div class="row"><button class="btn wide" data-act="tlStep" data-v="-1">‹ Earlier</button><button class="btn wide" data-act="tlStep" data-v="1">Later ›</button></div>
-  <div class="row">${fromMenu ? '<button class="btn wide ghost" data-act="menu">Back to the menu</button>' : ''}<button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
+  <div class="row">${fromMenu ? '<button class="btn wide ghost" data-act="menu">Back to Settings</button>' : ''}<button class="btn wide ghost" data-act="closeModal">Close</button></div>`;
 }
 let tlSel = 0;
 function tlPick(i, scroll) {
@@ -6938,7 +6941,7 @@ function openHistory(fromMenu) {
 }
 function menuHTML() {
   const saved = loadSaved();
-  return `<h2>Menu</h2>
+  return `<div class="sheet-top"><h2>Settings</h2><button class="iconbtn xclose" data-act="closeModal" aria-label="Close settings"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
   <div class="row"><button class="btn wide" data-act="save">Save game</button><button class="btn wide" data-act="savedGames" data-from="menu">Saved games${savedCount() ? ` (${savedCount()})` : ''}</button></div>
   ${canFull() ? `<div class="row"><button class="btn wide" data-act="fullScreen">${isFull() ? 'Leave full screen' : 'Play full screen'}</button></div>` : ''}
   <h3>Share</h3>
@@ -7110,7 +7113,7 @@ const ACTS = {
   savedGames: el => { showModal(savedGamesHTML(el.dataset.from)); if (BOARD.on) fillCloudList(); },
   cloudLoad: el => { el.disabled = true; cloudLoad(el.dataset.game); },
   titleBack: () => showModal(titleHTML(loadSaved())),
-  titleNew: () => { const s = loadSaved(); showModal(`<h2>Start a new game?</h2><p class="desc">${s ? `Your ${esc(s.company)} game (${s.year}) stays saved. You can go back to it any time from Saved games, on this screen or in the menu.` : ''}</p>
+  titleNew: () => { const s = loadSaved(); showModal(`<h2>Start a new game?</h2><p class="desc">${s ? `Your ${esc(s.company)} game (${s.year}) stays saved. You can go back to it any time from Saved games, on this screen or in Settings.` : ''}</p>
     <div class="row"><button class="btn primary wide" data-act="newGameYes">Start a new game in 1870</button><button class="btn wide" data-act="titleBack">Back</button></div>`); },
   loadSlot: el => {
     const e = loadGames()[el.dataset.id]; let s = null; try { s = e && JSON.parse(e.S); } catch (x) { /* unreadable */ }
