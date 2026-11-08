@@ -7206,6 +7206,8 @@ function sndInit() {
   // the beds: each a noise source through a filter, its level slowly breathing
   SND.water = bed(bb, 'lowpass', 520, .7, .09, .45); SND.surf = bed(bb, 'bandpass', 260, .8, .06, .8);
   SND.wind = bed(wb, 'bandpass', 700, 5, .05, .6, 380); SND.rain = bed(wb, 'highpass', 2600, .5, .3, .15);
+  // a breeze without the howl, and small waves lapping along the shore
+  SND.breeze = bed(bb, 'lowpass', 900, .4, .06, .7, 250); SND.lap = bed(bb, 'bandpass', 520, .9, .45, .95);
   sndWake();
 }
 // Safari on the iPad starts sound only in the moment a finger lifts (or a click or a key), not when it touches down, and
@@ -7296,6 +7298,31 @@ function gull(vol = 1, pan = 0) {
     env(g, t, .02, .22 * vol, .1, .1); o.connect(f); f.connect(g); o.start(t); o.stop(t + .3);
   }
 }
+// Songbirds along the shore: a chickadee's two falling whistles, a warbler's quick trill, or a robin's carol
+function songbird(vol = 1, pan = 0) {
+  if (!sReady()) return;
+  const c = SND.ctx, out = sPan(SND.ambBus, pan), r = Math.random();
+  const note = (t, f0, f1, len, v) => { const o = c.createOscillator(), g = sGain(0, out); o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + len); env(g, t, .015, v * vol, len * .6, len * .4); o.connect(g); o.start(t); o.stop(t + len + .05); };
+  let t = sNow() + .05;
+  if (r < .34) { const f = 3700 + Math.random() * 300; note(t, f, f * .98, .32, .05); note(t + .42, f * .86, f * .84, .38, .045); }
+  else if (r < .67) { const f = 4400 + Math.random() * 900, n = 6 + Math.floor(Math.random() * 6); for (let i = 0; i < n; i++) note(t + i * .075, f * .85, f * 1.12, .06, .03 * (1 - i / (n * 1.6))); }
+  else { const n = 3 + Math.floor(Math.random() * 3); for (let i = 0; i < n; i++) { const f = 2100 + Math.random() * 700; note(t, f, f * (Math.random() < .5 ? 1.25 : .8), .2, .04); t += .28 + Math.random() * .12; } }
+}
+// A loon out on the water: the long rising wail of Georgian Bay summers, or now and then its tremolo
+function loon(vol = 1, pan = 0) {
+  if (!sReady()) return;
+  const c = SND.ctx, out = sPan(SND.ambBus, pan), t = sNow() + .05, g = sGain(0, out), f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200; f.connect(g);
+  const o = c.createOscillator(), o2 = c.createOscillator(), h = sGain(.18); o.type = 'sine'; o2.type = 'sine'; o.connect(f); o2.connect(h); h.connect(f);
+  const vib = c.createOscillator(), vd = sGain(9); vib.frequency.value = 4.5; vib.connect(vd); vd.connect(o.frequency);
+  if (Math.random() < .7) { // the wail: up to a long note, a break, and higher still
+    for (const [osc, m] of [[o, 1], [o2, 2]]) { const q = osc.frequency; q.setValueAtTime(620 * m, t); q.linearRampToValueAtTime(880 * m, t + .5); q.setValueAtTime(880 * m, t + 1.5); q.linearRampToValueAtTime(1040 * m, t + 1.7); q.setValueAtTime(1040 * m, t + 2.6); q.linearRampToValueAtTime(940 * m, t + 3.1); }
+    env(g, t, .4, .07 * vol, 2.3, .5); o.start(t); o2.start(t); vib.start(t); o.stop(t + 3.3); o2.stop(t + 3.3); vib.stop(t + 3.3);
+  } else { // the tremolo: a quavering laugh
+    o.frequency.setValueAtTime(900, t); o.frequency.linearRampToValueAtTime(1000, t + 1.4); o2.frequency.setValueAtTime(1800, t); o2.frequency.linearRampToValueAtTime(2000, t + 1.4);
+    const trem = c.createOscillator(), td = sGain(.5); trem.frequency.value = 9; trem.connect(td); const tg = sGain(.5); td.connect(tg.gain); f.disconnect(); f.connect(tg); tg.connect(g);
+    env(g, t, .08, .06 * vol, 1.2, .3); for (const x of [o, o2, vib, trem]) { x.start(t); x.stop(t + 1.7); }
+  }
+}
 // A ship's bell: struck n times, its partials ringing away at their own rates
 function bell(n = 2, vol = 1) {
   if (!sReady()) return;
@@ -7371,10 +7398,12 @@ function sndTick(now) {
   if (!sReady()) return;
   const t = sNow(), k = S.weather.today.k, winter = !S.season, zr = cam.z / cam.fitZ, harbour = !!HB;
   // the beds follow the weather: open water in summer, ice and wind in winter
-  const lv = { calm: [.2, 0, .04, 0], moderate: [.27, .05, .11, 0], fresh: [.32, .18, .24, 0], gale: [.28, .6, .55, .3], fog: [.18, 0, .03, 0] }[k] || [.27, .05, .11, 0];
+  // [deep water, surf, the gale's howl, rain, breeze, small waves lapping]: a calm day is nearly still
+  const lv = { calm: [.08, 0, 0, 0, 0, .22], moderate: [.16, .03, 0, 0, .14, .26], fresh: [.26, .15, .08, 0, .3, .12], gale: [.28, .6, .55, .3, .3, 0], fog: [.07, 0, 0, 0, 0, .14] }[k] || [.16, .03, 0, 0, .14, .26];
   const near = harbour ? 1.15 : clamp(.6 + zr * .08, .6, 1);
   const set = (node, v) => node.gain.setTargetAtTime(v, t, 1.2);
-  set(SND.water, winter ? 0 : lv[0] * near); set(SND.surf, winter ? 0 : lv[1] * near); set(SND.wind, winter ? .3 : lv[2]); set(SND.rain, winter ? 0 : lv[3]);
+  set(SND.water, winter ? 0 : lv[0] * near); set(SND.surf, winter ? 0 : lv[1] * near); set(SND.wind, winter ? .06 : lv[2]); set(SND.rain, winter ? 0 : lv[3]);
+  set(SND.breeze, winter ? .2 : lv[4]); set(SND.lap, winter ? 0 : lv[5] * near);
   if (S.weather.today.k !== SND.wx) { if (SND.wx && k === 'gale') { thunder(.9); SND.nextThunder = now + 15000; } SND.wx = k; }
   if (k === 'gale' && !winter && now > SND.nextThunder) { thunder(.5 + Math.random() * .5); SND.nextThunder = now + 22000 + Math.random() * 40000; }
   if (k === 'fog' && !winter && now > SND.nextHorn) { if (SND.nextHorn) foghorn(.7, (Math.random() - .5) * .8); SND.nextHorn = now + 16000 + Math.random() * 14000; }
@@ -7383,6 +7412,16 @@ function sndTick(now) {
     const close = harbour || zr > 3.5;
     if (SND.nextGull && close) gull(harbour ? 1 : .6, (Math.random() - .5) * 1.2);
     SND.nextGull = now + (harbour ? 5000 : 11000) + Math.random() * (harbour ? 9000 : 20000);
+  }
+  const month = monthOf(S.day), birdy = !winter && (k === 'calm' || k === 'moderate' || k === 'fog') && month >= 5 && month <= 9;
+  if (birdy && now > (SND.nextSong || 0)) {
+    const close = harbour || zr > 2.2;
+    if (SND.nextSong && close && k !== 'fog') songbird((harbour ? .9 : .55) * (k === 'calm' ? 1 : .7), (Math.random() - .5) * 1.4);
+    SND.nextSong = now + (k === 'calm' ? 4000 : 9000) + Math.random() * (k === 'calm' ? 9000 : 16000);
+  }
+  if (birdy && (k === 'calm' || k === 'fog') && now > (SND.nextLoon || 0)) {
+    if (SND.nextLoon) loon(.55, (Math.random() - .5) * 1.2);
+    SND.nextLoon = now + 35000 + Math.random() * 50000;
   }
   // the season opens and closes with the bell
   if (SND.season !== S.season) { if (SND.season != null) bell(S.season ? 2 : 4, .9); SND.season = S.season; }
@@ -8246,7 +8285,7 @@ function start(data) {
   requestAnimationFrame(t => { lastT = t; frame(t); });
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
 }
-window.__tugboatMap = MAP; window.__tugboat = { spawnJob, landTick, landPal, WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
+window.__tugboatMap = MAP; window.__tugboat = { SND, sndInit, sndTick, songbird, loon, spawnJob, landTick, landPal, WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;
     for (const type of ['schooner2', 'schooner3', 'steambarge', 'laker', 'canaller', 'passenger']) { [0, .8, 1.57, 2.6, 3.14, -1.57].forEach((a, i) => { const v = { type, name: type, lenFt: type === 'laker' ? 500 : type === 'canaller' ? 255 : type === 'steambarge' ? 190 : 130, loaded: i % 2 === 0, cargo: 'lumber', hue: '#2f3a40' }; const L = shipLen(v); ctx.save(); ctx.translate(60 + i * 110, y); ctx.scale(scale / 2, scale / 2); ctx.rotate(a); drawShipBody(v, L, a, 0, false); ctx.restore(); }); y += 95; } ctx = keep; }, addShip, shipType, seaPath, shipsDay, advance(days) { for (let d = 0; d < days; d += .05) { simAdvance(.05); moveTraffic(.05); if (Math.floor(S.day) !== lastTrafficDay) { lastTrafficDay = Math.floor(S.day); trafficDay(); } } }, vehicles,  get WET() { return WET; }, CELL, isWet, NETPOS, RAIL_SEGS, ROAD_SEGS, ll, homeView, renderHI, clampCam, get fling() { return fling; }, get gesture() { return gesture; }, get HI() { return HI; }, get S() { return S; }, simAdvance, startSeason, endSeason, newGame, PORT, GROUND, MODELS, getPath, nodePos, deliveryValue, distKm, buyTug, saveRoute, assignGround, netWorth, ui, select, cam, get GW() { return GW; }, get GH() { return GH; }, get WATER() { return WATER; } };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();
