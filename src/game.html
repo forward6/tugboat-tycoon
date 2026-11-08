@@ -7304,9 +7304,9 @@ function songbird(vol = 1, pan = 0) {
   const c = SND.ctx, out = sPan(SND.ambBus, pan), r = Math.random();
   const note = (t, f0, f1, len, v) => { const o = c.createOscillator(), g = sGain(0, out); o.type = 'sine'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + len); env(g, t, .015, v * vol, len * .6, len * .4); o.connect(g); o.start(t); o.stop(t + len + .05); };
   let t = sNow() + .05;
-  if (r < .34) { const f = 3700 + Math.random() * 300; note(t, f, f * .98, .32, .05); note(t + .42, f * .86, f * .84, .38, .045); }
-  else if (r < .67) { const f = 4400 + Math.random() * 900, n = 6 + Math.floor(Math.random() * 6); for (let i = 0; i < n; i++) note(t + i * .075, f * .85, f * 1.12, .06, .03 * (1 - i / (n * 1.6))); }
-  else { const n = 3 + Math.floor(Math.random() * 3); for (let i = 0; i < n; i++) { const f = 2100 + Math.random() * 700; note(t, f, f * (Math.random() < .5 ? 1.25 : .8), .2, .04); t += .28 + Math.random() * .12; } }
+  if (r < .34) { const f = 3300 + Math.random() * 300; note(t, f, f * .98, .4, .22); note(t + .5, f * .86, f * .84, .45, .2); }
+  else if (r < .67) { const f = 3600 + Math.random() * 700, n = 7 + Math.floor(Math.random() * 6); for (let i = 0; i < n; i++) note(t + i * .085, f * .85, f * 1.12, .07, .16 * (1 - i / (n * 1.6))); }
+  else { const n = 3 + Math.floor(Math.random() * 3); for (let i = 0; i < n; i++) { const f = 2000 + Math.random() * 700; note(t, f, f * (Math.random() < .5 ? 1.25 : .8), .24, .2); t += .3 + Math.random() * .12; } }
 }
 // A loon out on the water: the long rising wail of Georgian Bay summers, or now and then its tremolo
 function loon(vol = 1, pan = 0) {
@@ -7316,11 +7316,11 @@ function loon(vol = 1, pan = 0) {
   const vib = c.createOscillator(), vd = sGain(9); vib.frequency.value = 4.5; vib.connect(vd); vd.connect(o.frequency);
   if (Math.random() < .7) { // the wail: up to a long note, a break, and higher still
     for (const [osc, m] of [[o, 1], [o2, 2]]) { const q = osc.frequency; q.setValueAtTime(620 * m, t); q.linearRampToValueAtTime(880 * m, t + .5); q.setValueAtTime(880 * m, t + 1.5); q.linearRampToValueAtTime(1040 * m, t + 1.7); q.setValueAtTime(1040 * m, t + 2.6); q.linearRampToValueAtTime(940 * m, t + 3.1); }
-    env(g, t, .4, .07 * vol, 2.3, .5); o.start(t); o2.start(t); vib.start(t); o.stop(t + 3.3); o2.stop(t + 3.3); vib.stop(t + 3.3);
+    env(g, t, .4, .2 * vol, 2.3, .5); o.start(t); o2.start(t); vib.start(t); o.stop(t + 3.3); o2.stop(t + 3.3); vib.stop(t + 3.3);
   } else { // the tremolo: a quavering laugh
     o.frequency.setValueAtTime(900, t); o.frequency.linearRampToValueAtTime(1000, t + 1.4); o2.frequency.setValueAtTime(1800, t); o2.frequency.linearRampToValueAtTime(2000, t + 1.4);
     const trem = c.createOscillator(), td = sGain(.5); trem.frequency.value = 9; trem.connect(td); const tg = sGain(.5); td.connect(tg.gain); f.disconnect(); f.connect(tg); tg.connect(g);
-    env(g, t, .08, .06 * vol, 1.2, .3); for (const x of [o, o2, vib, trem]) { x.start(t); x.stop(t + 1.7); }
+    env(g, t, .08, .17 * vol, 1.2, .3); for (const x of [o, o2, vib, trem]) { x.start(t); x.stop(t + 1.7); }
   }
 }
 // A ship's bell: struck n times, its partials ringing away at their own rates
@@ -7399,7 +7399,7 @@ function sndTick(now) {
   const t = sNow(), k = S.weather.today.k, winter = !S.season, zr = cam.z / cam.fitZ, harbour = !!HB;
   // the beds follow the weather: open water in summer, ice and wind in winter
   // [deep water, surf, the gale's howl, rain, breeze, small waves lapping]: a calm day is nearly still
-  const lv = { calm: [.08, 0, 0, 0, 0, .22], moderate: [.16, .03, 0, 0, .14, .26], fresh: [.26, .15, .08, 0, .3, .12], gale: [.28, .6, .55, .3, .3, 0], fog: [.07, 0, 0, 0, 0, .14] }[k] || [.16, .03, 0, 0, .14, .26];
+  const lv = { calm: [.08, 0, 0, 0, 0, .22], moderate: [.11, .01, 0, 0, .06, .22], fresh: [.26, .15, .08, 0, .3, .12], gale: [.28, .6, .55, .3, .3, 0], fog: [.07, 0, 0, 0, 0, .14] }[k] || [.11, .01, 0, 0, .06, .22];
   const near = harbour ? 1.15 : clamp(.6 + zr * .08, .6, 1);
   const set = (node, v) => node.gain.setTargetAtTime(v, t, 1.2);
   set(SND.water, winter ? 0 : lv[0] * near); set(SND.surf, winter ? 0 : lv[1] * near); set(SND.wind, winter ? .06 : lv[2]); set(SND.rain, winter ? 0 : lv[3]);
@@ -7415,9 +7415,9 @@ function sndTick(now) {
   }
   const month = monthOf(S.day), birdy = !winter && (k === 'calm' || k === 'moderate' || k === 'fog') && month >= 5 && month <= 9;
   if (birdy && now > (SND.nextSong || 0)) {
-    const close = harbour || zr > 2.2;
-    if (SND.nextSong && close && k !== 'fog') songbird((harbour ? .9 : .55) * (k === 'calm' ? 1 : .7), (Math.random() - .5) * 1.4);
-    SND.nextSong = now + (k === 'calm' ? 4000 : 9000) + Math.random() * (k === 'calm' ? 9000 : 16000);
+    const near = harbour ? 1 : clamp(.45 + zr * .12, .45, .9);
+    if (SND.nextSong && k !== 'fog') songbird(near * (k === 'calm' ? 1 : .65), (Math.random() - .5) * 1.4);
+    SND.nextSong = now + (k === 'calm' ? 3000 : 8000) + Math.random() * (k === 'calm' ? 7000 : 14000);
   }
   if (birdy && (k === 'calm' || k === 'fog') && now > (SND.nextLoon || 0)) {
     if (SND.nextLoon) loon(.55, (Math.random() - .5) * 1.2);
