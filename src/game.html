@@ -301,7 +301,23 @@ table.cargo td.n{text-align:right}
   padding:7px 12px;display:flex;gap:10px;align-items:baseline;cursor:pointer;box-shadow:0 6px 18px -12px var(--shadow)}
 #ticker time{font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);font-weight:700;white-space:nowrap}
 #ticker span{font-family:var(--font-chart);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-#adviceBtn{position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;min-height:40px;padding:0 8px 0 14px;background:var(--surface);color:var(--ink);border:1px solid var(--magenta);border-radius:20px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px -10px var(--shadow)}
+#panelInner, .sheet > *:not(.sheet-top), .sheet-top > *, #ticker, #mapTags, #toasts{zoom:var(--tz, 1)}
+#mapTags{position:absolute;left:0;top:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px;max-width:min(360px,calc(100% - 70px));pointer-events:none;z-index:3}
+#mapTags > *{pointer-events:auto}
+#towTags{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+#towTags:empty{display:none}
+.towtag{display:grid;grid-template-columns:26px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:48px;padding:6px 12px 6px 10px;background:var(--surface);color:var(--ink);border:2px solid var(--magenta);border-radius:10px;font-family:inherit;text-align:left;cursor:pointer;box-shadow:0 8px 22px -10px var(--shadow);max-width:100%}
+.towtag.salv{border-color:var(--bad)}
+.towtag b{display:block;font-size:15px}
+.towtag small{display:block;font-size:13px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.towtag .go{font-weight:700;font-size:14px;color:var(--magenta)}
+.towtag.salv .go{color:var(--bad)}
+.towtag.new{animation:tagIn .45s cubic-bezier(.2,.9,.3,1.2)}
+.towtag.more{min-height:34px;border-width:1px;grid-template-columns:1fr;font-size:13px}
+@media (max-width: 620px){ .towtag{min-height:40px;padding:4px 10px 4px 8px;gap:8px} .towtag small{display:none} .towtag:nth-child(n+3){display:none} }
+@keyframes tagIn{from{transform:translateX(-110%);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion: reduce){.towtag.new{animation:none}}
+#adviceBtn{display:flex;align-items:center;gap:8px;min-height:40px;padding:0 8px 0 14px;background:var(--surface);color:var(--ink);border:1px solid var(--magenta);border-radius:20px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px -10px var(--shadow)}
 #adviceBtn b{min-width:24px;height:24px;border-radius:12px;background:var(--magenta);color:var(--on-magenta);display:grid;place-items:center;font-size:13px;padding:0 6px}
 #adviceBtn[hidden]{display:none}
 #panel .fine a{color:var(--coast)}
@@ -429,7 +445,7 @@ table.cargo td.n{text-align:right}
   <div id="mapArea">
     <div id="banner" hidden></div>
     <div id="harbourBar" hidden><button class="btn" data-act="exitHarbour" aria-label="Back to the map">‹ Map</button><div><b id="hbTitle"></b><small id="hbNote">Today's street map, grown back to its size that year. Map data © OpenStreetMap contributors, via Overture Maps.</small></div></div>
-    <button id="adviceBtn" data-act="advice" hidden><span>What next?</span><b id="adviceN"></b></button>
+    <div id="mapTags"><button id="adviceBtn" data-act="advice" hidden><span>What next?</span><b id="adviceN"></b></button><div id="towTags" aria-live="polite"></div></div>
     <div id="toasts" aria-live="polite"></div>
     <div id="ticker" data-act="newsAll" role="button" tabindex="0"><time id="tickDate"></time><span id="tickText"></span></div>
     <div id="zoomCtl"><button data-act="zoom" data-v="1" aria-label="Zoom in">+</button><button data-act="zoom" data-v="-1" aria-label="Zoom out">−</button><button data-act="home" aria-label="Show the whole map"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg></button></div>
@@ -4125,29 +4141,41 @@ function offscreenMarkers() {
     if (sx > view.left + pad && sx < view.left + view.w - pad && sy > view.top + pad && sy < view.top + view.h - pad) continue;
     const dx = sx - cx, dy = sy - cy, k = Math.min((view.w / 2 - pad - 60) / Math.max(1e-6, Math.abs(dx)), (view.h / 2 - pad - 70) / Math.max(1e-6, Math.abs(dy)));
     out.push({ pid: p.id, x: cx + dx * k, y: cy + dy * k, ang: Math.atan2(dy, dx), miles: Math.round(Math.hypot(...[0, 1].map(i => s2w(cx, cy)[i] - nodePos('p:' + p.id)[i])) / 1.609) });
+    out[out.length - 1].label = `${p.name} · ${out[out.length - 1].miles} mi`;
+  }
+  // (a phone's small map has the tags at the top for these, and no room for arrows as well)
+  if (TOUCH && S && !ui.mode && view.w >= 620) for (const j of S.jobs) {
+    if (j.state !== 'open') continue;
+    const [sx, sy] = w2s(...j.pos);
+    if (sx > view.left + pad && sx < view.left + view.w - pad && sy > view.top + pad && sy < view.top + view.h - pad) continue;
+    const dx = sx - cx, dy = sy - cy, k = Math.min((view.w / 2 - pad - 60) / Math.max(1e-6, Math.abs(dx)), (view.h / 2 - pad - 70) / Math.max(1e-6, Math.abs(dy)));
+    out.push({ job: j.id, salv: j.kind === 'salvage', x: cx + dx * k, y: cy + dy * k, ang: Math.atan2(dy, dx), label: `${j.kind === 'salvage' ? 'Salvage' : 'Tow'} wanted · ${money(j.reward)}` });
   }
   return out;
 }
 let lastOffscreen = [];
 function drawOffscreen() {
   lastOffscreen = offscreenMarkers();
-  ctx.save(); ctx.font = `700 12px ${FONT_UI}`; ctx.textBaseline = 'middle';
+  const K = MAPK(), TH = Math.round(26 * K), mt = $('#mapTags'), tagBox = mt && mt.offsetHeight > 8 ? mt.getBoundingClientRect() : null;
+  ctx.save(); ctx.font = `700 ${12 * K}px ${FONT_UI}`; ctx.textBaseline = 'middle';
   // lay the tags out first, nudging any that would cover another one up or down
   const placed = [];
   for (const m of lastOffscreen.sort((a, b) => a.y - b.y)) {
-    const w = ctx.measureText(`${PORT[m.pid].name} · ${m.miles} mi`).width + 30, x = clamp(m.x - w / 2, view.left + 6, view.left + view.w - w - 6);
-    let y = m.y - 13;
-    for (const o of placed) if (x < o[0] + o[2] + 4 && o[0] < x + w + 4 && y < o[1] + 30 && o[1] < y + 30) y = o[1] + 30;
-    if (placed.length && y + 26 > view.top + view.h - 8) y = Math.min(...placed.map(o => o[1])) - 30;
-    m.box = [x, y, w, 26]; placed.push(m.box);
+    const w = ctx.measureText(m.label).width + 30 * K, x = clamp(m.x - w / 2, view.left + 6, view.left + view.w - w - 6);
+    let y = m.y - TH / 2;
+    // keep clear of the tags at the top left of the map, then of the tags already placed
+    if (tagBox && x < tagBox.right + 6 && y < tagBox.bottom + 6) y = tagBox.bottom + 6;
+    for (const o of placed) if (x < o[0] + o[2] + 4 && o[0] < x + w + 4 && y < o[1] + TH + 4 && o[1] < y + TH + 4) y = o[1] + TH + 4;
+    if (placed.length && y + TH > view.top + view.h - 8) y = Math.min(...placed.map(o => o[1])) - TH - 4;
+    m.box = [x, y, w, TH]; placed.push(m.box);
   }
   for (const m of lastOffscreen) {
-    const label = `${PORT[m.pid].name} · ${m.miles} mi`, [x, y, w] = m.box;
-    const editing = ui.mode && ui.mode.type === 'route';
-    ctx.fillStyle = editing ? COL.magenta : COL.surface; ctx.strokeStyle = editing ? COL.magenta : COL.ink; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, 26, 13) : ctx.rect(x, y, w, 26); ctx.fill(); ctx.stroke();
-    ctx.save(); ctx.translate(x + 14, y + 13); ctx.rotate(m.ang); ctx.fillStyle = editing ? COL.surface : COL.ink; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.restore();
-    ctx.fillStyle = editing ? COL.surface : COL.ink; ctx.textAlign = 'left'; ctx.fillText(label, x + 24, y + 13.5);
+    const label = m.label, [x, y, w] = m.box;
+    const editing = (ui.mode && ui.mode.type === 'route') || m.job, accent = m.salv ? COL.bad : COL.magenta;
+    ctx.fillStyle = editing ? accent : COL.surface; ctx.strokeStyle = editing ? accent : COL.ink; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, TH, TH / 2) : ctx.rect(x, y, w, TH); ctx.fill(); ctx.stroke();
+    ctx.save(); ctx.translate(x + 14 * K, y + TH / 2); ctx.rotate(m.ang); ctx.fillStyle = editing ? COL.surface : COL.ink; ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.restore();
+    ctx.fillStyle = editing ? COL.surface : COL.ink; ctx.textAlign = 'left'; ctx.fillText(label, x + 24 * K, y + TH / 2 + .5);
   }
   ctx.restore();
 }
@@ -4199,7 +4227,7 @@ function draw(now) {
     ctx.fillStyle = rgba(col, .13); ctx.fill();
     ctx.setLineDash([4, 4]); ctx.lineWidth = sel || pickable ? 2.2 : 1.3; ctx.strokeStyle = sel ? COL.magenta : rgba(col, .85); ctx.stroke(); ctx.setLineDash([]);
     drawFish(sx, sy, 8, rgba(col, .95));
-    if (zr > 1.15 || sel || pickable) { ctx.font = `italic 13px ${FONT_IT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; halo(g.name, sx, sy + r + 3, COL.ink); }
+    if (zr > 1.15 || sel || pickable) { ctx.font = `italic ${13 * MAPK()}px ${FONT_IT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; halo(g.name, sx, sy + r + 3, COL.ink); }
   }
   // selected route
   const selTug = ui.sel && ui.sel.t === 'tug' ? S.tugs.find(t => t.id === ui.sel.id) : null;
@@ -4244,11 +4272,14 @@ function draw(now) {
     if (j.state !== 'open') continue; // a schooner under tow is drawn astern of her tug
     const [sx, sy] = w2s(...j.pos);
     const pulse = reduceMotion ? .5 : (Math.sin(now / 300) + 1) / 2;
-    ctx.beginPath(); ctx.arc(sx, sy, 14 + pulse * 6, 0, Math.PI * 2); ctx.strokeStyle = rgba(j.kind === 'salvage' ? COL.bad : COL.magenta, .35 + .4 * (1 - pulse)); ctx.lineWidth = 2; ctx.stroke();
-    drawSchooner(sx, sy, j.kind === 'salvage', 1);
+    const big = TOUCH ? 1.45 : 1, colJ = j.kind === 'salvage' ? COL.bad : COL.magenta;
+    if (TOUCH) { ctx.beginPath(); ctx.arc(sx, sy, 14 * big, 0, Math.PI * 2); ctx.fillStyle = rgba(colJ, .12 + .1 * pulse); ctx.fill(); }
+    ctx.beginPath(); ctx.arc(sx, sy, (14 + pulse * 6) * big, 0, Math.PI * 2); ctx.strokeStyle = rgba(colJ, .35 + .4 * (1 - pulse)); ctx.lineWidth = 2 * big; ctx.stroke();
+    ctx.save(); ctx.translate(sx, sy); ctx.scale(big, big); drawSchooner(0, 0, j.kind === 'salvage', 1); ctx.restore();
     const sel = ui.sel && ui.sel.t === 'job' && ui.sel.id === j.id;
-    if (sel) { ctx.beginPath(); ctx.arc(sx, sy, 16, 0, Math.PI * 2); ctx.strokeStyle = COL.magenta; ctx.lineWidth = 2.5; ctx.stroke(); }
-    ctx.font = `bold 12px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; halo(money(j.reward), sx, sy - 16, j.kind === 'salvage' ? COL.bad : COL.magenta);
+    if (sel) { ctx.beginPath(); ctx.arc(sx, sy, 16 * big, 0, Math.PI * 2); ctx.strokeStyle = COL.magenta; ctx.lineWidth = 2.5; ctx.stroke(); }
+    ctx.font = `bold ${Math.round(12 * (TOUCH ? 1.2 : 1) * MAPK())}px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    halo(TOUCH ? `${j.kind === 'salvage' ? 'Salvage' : 'Tow'} wanted · ${money(j.reward)}` : money(j.reward), sx, sy - 16 * big, colJ);
   }
   drawTraffic(zr, now);
   // smoke: coal smoke from the steamers, a thin haze from the gas and diesel boats
@@ -4279,7 +4310,7 @@ function draw(now) {
   // money floaters
   for (let i = floaters.length - 1; i >= 0; i--) {
     const f = floaters[i], age = (now - f.t0) / 1800; if (age > 1) { floaters.splice(i, 1); continue; }
-    const [sx, sy] = w2s(f.x, f.y); ctx.globalAlpha = 1 - age * age; ctx.font = `800 15px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    const [sx, sy] = w2s(f.x, f.y); ctx.globalAlpha = 1 - age * age; ctx.font = `800 ${15 * MAPK()}px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     halo(f.text, sx, sy - 14 - age * 30, COL.money); ctx.globalAlpha = 1;
   }
   drawOffscreen();
@@ -4309,7 +4340,7 @@ function drawHoverMarks(t, zr) {
   const stops = isFish(t) || isWarp(t) ? [] : t.route.length >= 2 ? t.route : [];
   ctx.font = `bold 12px ${FONT_UI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   stops.forEach((pid, i) => { const [sx, sy] = w2s(...nodePos('p:' + pid)); ctx.beginPath(); ctx.arc(sx + 12, sy - 12, 9, 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill(); ctx.fillStyle = COL.surface; ctx.fillText(String(i + 1), sx + 12, sy - 11.5); });
-  ctx.font = `bold 13px ${FONT_UI}`; ctx.textBaseline = 'bottom'; halo(t.name, bx, by - 8 - 9 * tugF(zr), col);
+  ctx.font = `bold ${13 * MAPK()}px ${FONT_UI}`; ctx.textBaseline = 'bottom'; halo(t.name, bx, by - 8 - 9 * tugF(zr), col);
 }
 // "Harbour view" tags under the railway ports once you're in close
 let harbourChips = [], portLabels = [];
@@ -4336,7 +4367,7 @@ function drawGulls(zr, now) {
 function polyline(pts) { ctx.beginPath(); pts.forEach((p, i) => { const [x, y] = w2s(p[0], p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); }
 function halo(text, x, y, color) { ctx.lineWidth = 3.5; ctx.strokeStyle = rgba(COL.surface, .92); ctx.lineJoin = 'round'; ctx.strokeText(text, x, y); ctx.fillStyle = color; ctx.fillText(text, x, y); }
 function portLabel(p, sx, sy) {
-  ctx.font = `700 ${p.major ? 14.5 : 13}px ${FONT_UI}`;
+  ctx.font = `700 ${(p.major ? 14.5 : 13) * MAPK()}px ${FONT_UI}`;
   const o = 10; let x = sx, y = sy;
   ctx.textAlign = p.label === 'e' ? 'left' : p.label === 'w' ? 'right' : 'center';
   ctx.textBaseline = p.label === 'n' ? 'bottom' : p.label === 's' ? 'top' : 'middle';
@@ -5023,7 +5054,7 @@ function hitLines(x, y) {
   if (!best) for (const sg of ROAD_SEGS) { if (yr < sg.open) continue; const d = segDist(x, y, segPts(sg.a, sg.b)); if (d < bd) { bd = d; best = { t: 'road', id: sg.road.num }; } }
   return best;
 }
-function hitOffscreen(x, y) { const m = lastOffscreen.find(m => m.box && x >= m.box[0] && x <= m.box[0] + m.box[2] && y >= m.box[1] && y <= m.box[1] + m.box[3]); return m ? { t: 'port', id: m.pid } : null; }
+function hitOffscreen(x, y) { const m = lastOffscreen.find(m => m.box && x >= m.box[0] && x <= m.box[0] + m.box[2] && y >= m.box[1] && y <= m.box[1] + m.box[3]); return m ? (m.job ? { t: 'job', id: m.job, edge: true } : { t: 'port', id: m.pid }) : null; }
 function hitTest(x, y) {
   if (HB) return harbourHit(x, y);
   const mode = ui.mode && ui.mode.type;
@@ -5103,6 +5134,7 @@ function tap(x, y) {
     return;
   }
   if (h && h.t === 'harbour') { enterHarbour(h.id); return; }
+  if (h && h.edge) { const j = S.jobs.find(j => j.id === h.id); select({ t: 'job', id: h.id }); if (j) flyTo(j.pos, Math.max(cam.z, cam.fitZ * 2.2)); return; }
   if (!m && h && !h.label && ['tug', 'port', 'ship', 'job'].includes(h.t)) {
     const all = hitAll(x, y);
     if (all.length > 1) { showPicker(all, x, y); return; }
@@ -5272,6 +5304,42 @@ function contractHTML(id) {
   ${mine.length ? `<ul class="list">${mine.map(t => `<li><button class="item" data-act="kTug" data-id="${k.id}" data-tug="${t.id}" ${onRun(t) ? 'disabled' : ''}>${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${onRun(t) ? (fish ? `Lands her catch at ${PORT[k.to].name}` : 'On this run') : fish ? `Lands at ${t.home ? PORT[t.home].name : 'nowhere yet'}` : t.route.length ? 'Works ' + t.route.map(p => PORT[p].name).join(', ') : 'No route'}</small></span><span class="side">${onRun(t) ? '✓' : fish ? 'Land here' : 'Put her on it'}</span></button></li>`).join('')}</ul>
     <p class="fine">${fish ? `Her catch counts toward the contract when she lands it at ${PORT[k.to].name}.` : `"Put her on it" gives her the route ${runText(k)}. Her captain carries the contract cargo first, as long as the contract still wants it.`}</p>`
     : `<p class="fine">You have no ${fish ? 'fish tugs' : 'towing tugs'}. Buy one at the shipyard.</p>`}`;
+}
+/* ---------- On touch screens (an iPad, a phone), a ship wanting a tow gets a tag that slides out at the top left of the
+   map and stays until she is taken or her offer runs out, so it can't be missed under a long company card. Tapping it
+   opens her card, your tugs listed nearest first, and swings the map to her. A mouse and a big screen don't need it. ---- */
+const TOUCH = (() => { try { return matchMedia('(hover: none) and (pointer: coarse)').matches; } catch (e) { return false; } })();
+let towSig = '';
+const towSeen = new Set();
+function towTick() {
+  const box = $('#towTags'); if (!box) return;
+  const show = TOUCH && inPlay && S && S.season && !S.over && !tour && !HB && !(ui.mode && ui.mode.type === 'route');
+  const jobs = show ? S.jobs.filter(j => j.state === 'open').sort((a, b) => b.reward - a.reward) : [];
+  const mine = j => S.tugs.find(t => t.owner === 'p' && t.job === j.id), rival = j => S.tugs.find(t => t.owner === 'r' && t.job === j.id);
+  const sig = jobs.map(j => j.id + daysLeft(j) + (mine(j) ? 'm' : '') + (rival(j) ? 'r' : '')).join('|');
+  if (sig === towSig) return; towSig = sig;
+  let fresh = false;
+  box.innerHTML = jobs.slice(0, 3).map(j => {
+    const n = !towSeen.has(j.id); if (n) { towSeen.add(j.id); fresh = true; }
+    const m = mine(j), r = rival(j), salv = j.kind === 'salvage';
+    const note = m ? `Your ${m.name} is on her way` : r ? `${coName(r.co)} is racing for her` : `${j.name}, ${j.where} · ${daysLeft(j)} left`;
+    return `<button class="towtag${salv ? ' salv' : ''}${n ? ' new' : ''}" data-act="towTag" data-id="${j.id}">${jobGlyph(j)}<span><b>${salv ? 'Salvage wanted' : 'Tow wanted'} · ${money(j.reward)}</b><small>${esc(note)}</small></span><span class="go">${m ? '›' : 'Send ›'}</span></button>`;
+  }).join('') + (jobs.length > 3 ? `<button class="towtag more" data-act="towTag" data-id="${jobs[3].id}">${jobs.length - 3} more wanted ›</button>` : '');
+  if (fresh && !reduceMotion) bell(1, .45);
+}
+setInterval(towTick, 1000);
+/* ---------- Text size: Standard, Large or Larger, for the cards, buttons and lists and the names on the map. An iPad
+   starts one step up; a phone or a computer at Standard. Kept on each device. ---------- */
+const TEXT_SIZES = [['Standard', 1], ['Large', 1.15], ['Larger', 1.3]], TEXT_KEY = 'tugboat-text';
+const isTablet = () => TOUCH && Math.min(screen.width, screen.height) >= 700;
+let TXT = (() => { try { const v = parseFloat(localStorage.getItem(TEXT_KEY)); if (TEXT_SIZES.some(([, k]) => k === v)) return v; } catch (e) { /* storage blocked */ } return isTablet() ? 1.15 : 1; })();
+const MAPK = () => TXT;
+function textApply() { document.documentElement.style.setProperty('--tz', String(TXT)); }
+textApply();
+function textMenuHTML() {
+  return `<h3>Text size</h3>
+  <div class="seg" role="group" aria-label="Text size">${TEXT_SIZES.map(([n, k]) => `<button data-act="textSize" data-v="${k}" aria-pressed="${TXT === k}">${n}</button>`).join('')}</div>
+  <p class="fine">Makes the cards, buttons and lists larger, and the names on the map.${isTablet() ? ' An iPad starts at Large.' : ''}</p>`;
 }
 /* ---------- What next?: the office's suggestions from the state of the game, most pressing first. A button on the map
    shows when something wants doing (a boat with nothing to do, an offer to answer, an overdraft); the menu always has it. ---------- */
@@ -6804,7 +6872,7 @@ function drawWrecks(zr) {
     ctx.strokeStyle = rgba(COL.ink, .85); ctx.stroke();
     if (sel) { ctx.beginPath(); ctx.arc(0, 0, r * 1.8, 0, 7); ctx.strokeStyle = COL.magenta; ctx.lineWidth = 2.2; ctx.stroke(); }
     ctx.restore();
-    if (zr > 2.2 || sel) { ctx.font = `italic 12.5px ${FONT_IT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; halo(w.name, sx, sy + r + 3, COL.ink); }
+    if (zr > 2.2 || sel) { ctx.font = `italic ${12.5 * MAPK()}px ${FONT_IT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top'; halo(w.name, sx, sy + r + 3, COL.ink); }
   }
 }
 function wreckHTML(id) {
@@ -6952,6 +7020,7 @@ function menuHTML() {
   <p class="fine">Your game is kept on this device only. To carry on somewhere else, send it (by Mail, Messages, AirDrop or anything that sends a file), then open the game there and load the file.</p>
   ${ui.confirmNew ? `<div class="confirm"><b>Start a new game in 1870? This one stays in Saved games, where you left it.</b><div class="row"><button class="btn danger wide" data-act="newGameYes">Start over</button><button class="btn wide" data-act="newGameNo">Keep playing</button></div></div>` : '<button class="btn" data-act="newGame">New game</button>'}
   ${playLog.owner && playLog.db ? '<div class="row"><button class="btn wide" data-act="players">Who\'s been playing</button></div>' : ''}
+  ${textMenuHTML()}
   ${soundMenuHTML()}
   ${gfxMenuHTML()}
   <h3>How to play</h3>
@@ -7000,6 +7069,8 @@ const ACTS = {
   wreckChart: el => { const w = WRECK[el.dataset.id]; closeModal(); if (!w) return; select({ t: 'wreck', id: w.id }); flyTo(wreckPos(w), cam.fitZ * 4); },
   adviceBtn: el => { try { if (el.dataset.v === '1') localStorage.removeItem(ADVICE_OFF); else localStorage.setItem(ADVICE_OFF, '1'); } catch (e) {} adviceSig = '-'; adviceTick(); showModal(adviceHTML()); },
   adviceOffers: () => { const h = offersHTML(); if (h) showModal(h); else closeModal(); },
+  textSize: el => { TXT = +el.dataset.v; try { localStorage.setItem(TEXT_KEY, String(TXT)); } catch (e) { /* storage blocked */ } textApply(); STILL.key = ''; HI.sig = ''; const sc = $('#modalBody').scrollTop; showModal(menuHTML()); $('#modalBody').scrollTop = sc; ui.panelDirty = true; },
+  towTag: el => { const j = S.jobs.find(j => j.id === el.dataset.id); if (!j) return; select({ t: 'job', id: j.id }); flyTo(j.pos, Math.max(cam.z, cam.fitZ * 2.2)); towSig = ''; },
   adviceContract: el => { closeModal(); select({ t: 'contract', id: el.dataset.id }); },
   adviceTug: el => { const t = S.tugs.find(t => t.id === el.dataset.id); closeModal(); if (t) { select({ t: 'tug', id: t.id }); startRouteEdit(t); } },
   adviceFish: el => { const t = S.tugs.find(t => t.id === el.dataset.id); closeModal(); if (t) { select({ t: 'tug', id: t.id }); ui.mode = { type: 'ground', tugId: t.id }; ui.panelDirty = true; } },
