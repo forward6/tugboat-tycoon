@@ -97,16 +97,29 @@ export async function playerFor(env, id, key, { claim = false, request = null } 
   if (p) {
     const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM keys WHERE player = ?`).bind(id).first('n');
     if (n) return null; // a player whose devices hold keys: a new key comes only through signing in
-    await env.DB.prepare(`INSERT INTO keys (hash, player, created, last) VALUES (?, ?, ?, ?)`).bind(h, id, now, now).run();
-    return p;
+    await env.DB.prepare(`INSERT OR IGNORE INTO keys (hash, player, created, last) VALUES (?, ?, ?, ?)`).bind(h, id, now, now).run();
+    return (await keyOwner(env, h)) === id ? p : null;
   }
   // a new player: a few a day from any one connection, to keep the board from being flooded
   if (request && !(await allow(env, 'new', request, 30, 864e5))) return null;
+  // (a device's first report and its first online save can arrive together: whichever comes second finds the player made)
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO players (id, name, first, last, created) VALUES (?, '', ?, ?, ?)`).bind(id, now, now, now),
-    env.DB.prepare(`INSERT INTO keys (hash, player, created, last) VALUES (?, ?, ?, ?)`).bind(h, id, now, now),
+    env.DB.prepare(`INSERT OR IGNORE INTO players (id, name, first, last, created) VALUES (?, '', ?, ?, ?)`).bind(id, now, now, now),
+    env.DB.prepare(`INSERT OR IGNORE INTO keys (hash, player, created, last) VALUES (?, ?, ?, ?)`).bind(h, id, now, now),
   ]);
+  if ((await keyOwner(env, h)) !== id) return null;
   return env.DB.prepare(`SELECT * FROM players WHERE id = ?`).bind(id).first();
+}
+const keyOwner = (env, h) => env.DB.prepare(`SELECT player FROM keys WHERE hash = ?`).bind(h).first('player');
+// Who has played: a minute of play, or a passkey or recovery code. The rest are visits that never got going (since
+// November 2026 the game sends nothing until a first decision, but visits from before are kept until the sweep).
+export const PLAYED = `(minutes >= 1 OR recovery IS NOT NULL OR id IN (SELECT player FROM passkeys))`;
+// Once an hour or so, visits that never played are cleared away after a week, with their keys and online saves
+let swept = 0;
+export async function sweep(env) {
+  const now = Date.now(); if (now - swept < 3600e3) return; swept = now;
+  const idle = `SELECT id FROM players WHERE NOT ${PLAYED} AND last < ${now - 7 * 864e5}`;
+  await env.DB.batch(['saves WHERE player', 'keys WHERE player', 'players WHERE id'].map(w => env.DB.prepare(`DELETE FROM ${w} IN (${idle})`)));
 }
 // Give a device a new key for a player (after signing in)
 export async function addKey(env, player, key, device) {

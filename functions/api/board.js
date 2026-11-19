@@ -2,7 +2,7 @@
 // played; anyone can read the board. For each player it keeps the game they are playing now and their best game (the most
 // any of their companies has been worth), so starting over never lowers their place. Kept in the D1 database (DB); a
 // report must carry the device's key, so no one can post as another player from the ids on the board.
-import { json, clip, num, ensure, playerFor, parseJSON, playerInfo } from '../../server/lib.js';
+import { json, clip, num, ensure, playerFor, parseJSON, playerInfo, sweep } from '../../server/lib.js';
 import { nameOK, settlerName } from '../../server/names.js';
 import * as legacy from '../../server/legacy-board.js';
 
@@ -15,18 +15,6 @@ const row = p => {
   const games = parseJSON(p.games, []);
   return { id: p.id, name: p.name, ...(parseJSON(p.cur, {}) || {}), best: parseJSON(p.best), place: parseJSON(p.place), device: p.device, app: !!p.app, last: p.last, first: p.first, minutes: p.minutes, sessions: p.sessions, gamesPlayed: Math.max(1, games.length) };
 };
-
-// Once an hour or so, the visits that never played (robots that open every new website, mostly) are cleared away after a
-// week: no minute played, no passkey, no recovery code and no online save
-let swept = 0;
-async function sweep(env) {
-  const now = Date.now(); if (now - swept < 3600e3) return; swept = now;
-  const idle = `SELECT id FROM players WHERE minutes < 1 AND last < ? AND recovery IS NULL AND id NOT IN (SELECT player FROM passkeys) AND id NOT IN (SELECT player FROM saves)`;
-  await env.DB.batch([
-    env.DB.prepare(`DELETE FROM keys WHERE player IN (${idle})`).bind(now - 7 * 864e5),
-    env.DB.prepare(`DELETE FROM players WHERE id IN (${idle})`).bind(now - 7 * 864e5),
-  ]);
-}
 
 export async function onRequestGet(ctx) {
   const { request, env } = ctx;

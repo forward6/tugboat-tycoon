@@ -1,4 +1,5 @@
 // Players across devices, end to end, against tools/devserver.mjs: node tools/accounts.js <outdir>
+//  0. a robot opens the game and presses Open the season: the server hears nothing until a first decision (a loan)
 //  1. a device plays and sets up a passkey (Chromium's virtual authenticator), and is given a recovery code
 //  2. a second device signs in with the same passkey (as if synced by iCloud) and finds the first device's games
 //  3. a third signs in with the recovery code; a fourth tries a wrong one
@@ -26,14 +27,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const text = p => p.evaluate(() => document.querySelector('#modalBody').innerText.replace(/\n+/g, ' | '));
   const me = p => p.evaluate(() => { const v = JSON.parse(localStorage.getItem('tugboat-player')); return `${v.name} (${v.id.slice(0, 6)}…)`; });
   const say = (who, what) => console.log(who.padEnd(10), what);
+  // the game opens cards of its own (news, the end of a season): close any, then open Settings
+  const settings = async p => { await p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; }); await p.click('[data-act="menu"]'); };
+
+  // 0. a robot: the first button, then nothing; the server mustn't hear of it until a decision is made
+  const R = await device('robot'), posts = [];
+  R.p.on('request', q => { if (q.method() === 'POST' && /\/api\//.test(q.url())) posts.push(q.url().replace(HOME, '')); });
+  await R.p.click('[data-act="play"]'); await R.p.waitForTimeout(2500);
+  const rid = await R.p.evaluate(() => JSON.parse(localStorage.getItem('tugboat-player')).id);
+  const onBoard = async () => (await (await fetch(`${HOME}/api/board?id=${rid}`)).json()).players.some(p => p.id === rid);
+  say('robot', `pressed Open the season: ${posts.length} posts to the server, on the board: ${await onBoard()}`);
+  await R.p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; });
+  await R.p.click('[data-act="bank"]'); await R.p.click('#modalBody [data-act="borrow"]'); await R.p.waitForTimeout(2500);
+  say('robot', `after a first decision (a loan): posts ${[...new Set(posts)].join(', ')}; on the board: ${await onBoard()}`);
+  await R.ctx.close();
 
   // 1. the first device plays a little, saves, and sets up a passkey
   const A = await device('iPad');
   await A.p.click('[data-act="play"]'); await A.p.waitForTimeout(500);
   await A.p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; T.S.company = 'Kerr Towing'; T.advance(20); });
-  await A.p.click('[data-act="menu"]'); await A.p.click('#modalBody [data-act="save"]'); await A.p.waitForTimeout(600);
+  await settings(A.p); await A.p.click('#modalBody [data-act="save"]'); await A.p.waitForTimeout(600);
   say('iPad', `plays as ${await me(A.p)}`);
-  await A.p.click('[data-act="menu"]'); await A.p.waitForTimeout(800);
+  await settings(A.p); await A.p.waitForTimeout(800);
   say('iPad', 'Settings: ' + (await A.p.evaluate(() => document.querySelector('#acctBox').innerText.replace(/\n+/g, ' | '))));
   await A.p.screenshot({ path: `${OUT}/acct-settings.png` });
   await A.p.click('#acctBox [data-act="acctCreate"]'); await A.p.waitForTimeout(1500);
@@ -68,7 +83,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   // sign out on the Mac
   C.p.on('dialog', d => d.accept());
   await C.p.evaluate(() => { document.querySelector('#modal').hidden = true; window.__tugboat.ui.modalOpen = false; });
-  await C.p.click('[data-act="menu"]'); await C.p.waitForTimeout(900);
+  await settings(C.p); await C.p.waitForTimeout(900);
   await C.p.click('#acctBox [data-act="acctSignOut"]'); await C.p.waitForTimeout(800);
   say('Mac', `signed out: now ${await me(C.p)}`);
 
@@ -78,7 +93,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await O.p.click('[data-act="play"]'); await O.p.waitForTimeout(500);
   await O.p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; T.S.company = 'Ross Towing'; T.advance(30); });
   const oldId = await me(O.p);
-  await O.p.click('[data-act="menu"]'); await O.p.waitForTimeout(500);
+  await settings(O.p); await O.p.waitForTimeout(500);
   say('old iPad', 'Settings: ' + (await O.p.evaluate(() => document.querySelector('#acctBox').innerText.replace(/\n+/g, ' | '))));
   await Promise.all([O.p.waitForURL(/localhost/, { timeout: 15000 }), O.p.click('#acctBox [data-act="moveGames"]')]);
   await O.p.waitForTimeout(2500);

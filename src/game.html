@@ -2809,7 +2809,7 @@ function saveGame(quiet) {
 // season, from Menu, Save game, and when the game is put away; only when the game has moved on since the last copy
 const CLOUD = { last: 0, sig: '' };
 function cloudSave(force, leaving) {
-  if (!BOARD.on || !inPlay || !S || navigator.onLine === false) return;
+  if (!BOARD.on || !BOARD.real || !inPlay || !S || navigator.onLine === false) return;
   const now = Date.now(), sig = S.gameId + ':' + Math.floor(S.day) + ':' + Math.round(S.cash);
   if (sig === CLOUD.sig || (!force && now - CLOUD.last < 5 * 60000) || (leaving && now - CLOUD.last < 45000)) return;
   const body = JSON.stringify({ id: BOARD.id, key: BOARD.key, game: S.gameId, when: gameWhen(S), year: S.year, company: S.company, worth: Math.round(netWorth()), data: JSON.stringify(S) });
@@ -5125,13 +5125,13 @@ function tap(x, y) {
     return;
   }
   if (m && m.type === 'ground') {
-    if (h && h.t === 'ground') { const t = S.tugs.find(t => t.id === m.tugId); if (t) { assignGround(t, h.id); toast(`${t.name} will fish ${GROUND[h.id].name} and land her catch at ${PORT[t.home].name}.`); } ui.mode = null; ui.panelDirty = true; }
+    if (h && h.t === 'ground') { const t = S.tugs.find(t => t.id === m.tugId); if (t) { assignGround(t, h.id); markReal(); toast(`${t.name} will fish ${GROUND[h.id].name} and land her catch at ${PORT[t.home].name}.`); } ui.mode = null; ui.panelDirty = true; }
     return;
   }
   if (m && m.type === 'home') {
     if (h && h.t === 'port') {
       if (!fishMarket(h.id)) { toast(`${PORT[h.id].name} has no fish buyer.`); return; }
-      const t = S.tugs.find(t => t.id === m.tugId); if (t) { t.home = h.id; toast(`${t.name} will land her catch at ${PORT[h.id].name}.`); }
+      const t = S.tugs.find(t => t.id === m.tugId); if (t) { t.home = h.id; markReal(); toast(`${t.name} will land her catch at ${PORT[h.id].name}.`); }
       ui.mode = null; ui.panelDirty = true;
     }
     return;
@@ -6715,9 +6715,18 @@ function toggleFull() {
    playing (a name of their choosing, or one drawn at random until they choose), their company, its year, worth, standing and fleet, and how long they have played;
    the board (functions/api/board.js, kept in Cloudflare KV) shows everyone, best first, with when they last played.
    ===================================================================== */
-const BOARD = { on: !inClaude && !window.__noBoard, id: '', name: '', named: false, mark: 0, started: false };
-try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '', named: !!v.named, key: v.key || '', known: true, hidePlace: !!v.hidePlace }); } catch (e) { /* storage blocked */ }
-const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name, named: BOARD.named, key: BOARD.key, hidePlace: !!BOARD.hidePlace })); } catch (e) { /* storage blocked */ } };
+const BOARD = { on: !inClaude && !window.__noBoard, id: '', name: '', named: false, mark: 0, started: false, real: false };
+try { const v = JSON.parse(localStorage.getItem('tugboat-player') || 'null'); if (v && v.id) Object.assign(BOARD, { id: v.id, name: v.name || '', named: !!v.named, key: v.key || '', known: true, hidePlace: !!v.hidePlace, real: v.real === undefined ? true : !!v.real }); } catch (e) { /* storage blocked */ }
+const boardSave = () => { try { localStorage.setItem('tugboat-player', JSON.stringify({ id: BOARD.id, name: BOARD.name, named: BOARD.named, key: BOARD.key, hidePlace: !!BOARD.hidePlace, real: !!BOARD.real })); } catch (e) { /* storage blocked */ } };
+// Nothing goes to the server, neither the scoreboard nor the online saves, until a person has played: made a first
+// decision in the game (a job for a boat, a purchase, a loan, a bid...). Robots that open every new website and press the
+// first button they see never get further. A device that played before this rule, or signs in, counts at once.
+const DECIDE = new Set(['buy', 'harbourOn', 'refit', 'borrow', 'repay', 'stance', 'routeSave', 'assign', 'sendJob', 'sellYes', 'layup', 'fitOut', 'layupAllYes', 'fitOutAll',
+  'sellOwnYes', 'buyBack', 'buyOut', 'payout', 'buyStock', 'sellStock', 'takeOver', 'offerMake', 'kAccept', 'kBid', 'tBid', 'tPass', 'kDecline', 'kTug', 'build', 'renameSave']);
+function markReal() {
+  if (BOARD.real) return; BOARD.real = true; boardSave();
+  if (BOARD.started) boardReport(); if (inPlay) setTimeout(() => cloudSave(true), 1500);
+}
 // a name for the board until the player picks one: a first name and a surname of the bay's settlers
 const BOARD_FIRST = ['Ada', 'Agnes', 'Albert', 'Alice', 'Angus', 'Annie', 'Archie', 'Bella', 'Clara', 'Duncan', 'Edith', 'Elsie', 'Ewan', 'Flora', 'George', 'Grace', 'Hamish', 'Harriet', 'Hugh', 'Isabel', 'Jean', 'Kate', 'Lachlan', 'Lottie', 'Malcolm', 'Neil', 'Nell', 'Owen', 'Peggy', 'Rose', 'Silas', 'Violet', 'Walter'];
 const BOARD_LAST = ['Barr', 'Boyd', 'Cameron', 'Campbell', 'Douglas', 'Fraser', 'Gordon', 'Grant', 'Hamilton', 'Kerr', 'MacKay', 'McLean', 'Morrison', 'Munro', 'Murray', 'Paterson', 'Reid', 'Ross', 'Shaw', 'Sinclair', 'Stewart', 'Wallace'];
@@ -6742,14 +6751,17 @@ const fromB64u = s => { const t = s.replace(/-/g, '+').replace(/_/g, '/'); retur
 async function apiPost(path, body) { try { const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const d = await r.json().catch(() => null); return d || { ok: false, error: `HTTP ${r.status}` }; } catch (e) { return { ok: false, error: 'offline' }; } }
 async function acctStatus() { ACCT.status = await apiPost('api/auth', { action: 'status', id: BOARD.id, key: BOARD.key }); return ACCT.status; }
 // This device becomes the player who signed in, with a key of its own
-function becomePlayer(p, key) { Object.assign(BOARD, { id: p.id, key, name: p.name || BOARD.name, named: !!p.named, hidePlace: !!p.hidePlace, known: true }); boardSave(); CLOUD.sig = ''; }
+function becomePlayer(p, key) { Object.assign(BOARD, { id: p.id, key, name: p.name || BOARD.name, named: !!p.named, hidePlace: !!p.hidePlace, known: true, real: true }); boardSave(); CLOUD.sig = ''; }
 async function passkeyCreate() {
+  if (!BOARD.real) { BOARD.real = true; boardSave(); }
   const b = await apiPost('api/auth', { action: 'register-begin', id: BOARD.id, key: BOARD.key, name: BOARD.name }); if (!b.ok) throw new Error(b.error);
   const pk = b.publicKey;
   const cred = await navigator.credentials.create({ publicKey: { ...pk, challenge: fromB64u(pk.challenge), user: { ...pk.user, id: fromB64u(pk.user.id) }, excludeCredentials: pk.excludeCredentials.map(c => ({ ...c, id: fromB64u(c.id) })) } });
   const r = await apiPost('api/auth', { action: 'register-finish', id: BOARD.id, key: BOARD.key, challengeId: b.challengeId, device: deviceName(),
     credential: { id: cred.id, type: cred.type, response: { clientDataJSON: toB64u(cred.response.clientDataJSON), attestationObject: toB64u(cred.response.attestationObject) } } });
-  if (!r.ok) throw new Error(r.error); return r;
+  if (!r.ok) throw new Error(r.error);
+  if (BOARD.started) boardReport(); if (inPlay) cloudSave(true);
+  return r;
 }
 async function passkeySignIn() {
   const b = await apiPost('api/auth', { action: 'login-begin' }); if (!b.ok) throw new Error(b.error === 'too many' ? 'Too many tries. Wait a while and try again.' : b.error);
@@ -6804,6 +6816,7 @@ function signedIn(p) { toast(`Signed in as ${p.name}.`); boardReport(); showModa
 const moveHTML = () => `<p class="fine"><b>Tugboat Tycoon has moved to tugboattycoon.com.</b> Move your games and your place on the scoreboard there, then play from the new address.</p>
   <div class="row"><button class="btn primary wide" data-act="moveGames">Move my games</button></div>`;
 async function moveGames() {
+  if (!BOARD.real) { BOARD.real = true; boardSave(); }
   if (inPlay) saveGame(true);
   toast('Moving your games…');
   // every game kept on this device goes up as an online save, the most recent last
@@ -6843,6 +6856,8 @@ async function arriveFromMove() {
 const deviceName = () => { const u = navigator.userAgent; return /iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'computer'; };
 function boardReport(start, leaving) {
   if (!BOARD.on || !S || navigator.onLine === false) return;
+  if (!BOARD.real) { if (start) BOARD.pendingStart = true; return; }
+  if (BOARD.pendingStart) { start = true; BOARD.pendingStart = false; }
   const t = performance.now(), minutes = BOARD.mark ? Math.min(15, (t - BOARD.mark) / 60000) : 0; BOARD.mark = leaving ? 0 : t;
   const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, key: BOARD.key, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, month: S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter', worth: Math.round(nw), title: titleFor(nw),
     hidePlace: !!BOARD.hidePlace, boats: S.tugs.filter(x => x.owner === 'p').length, fleet: S.tugs.filter(x => x.owner === 'p').reduce((a, t) => (a[t.model] = (a[t.model] || 0) + 1, a), {}), device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
@@ -7224,7 +7239,7 @@ const ACTS = {
     // the board takes only a decent name: the server says
     const r = await apiPost('api/board', { id: BOARD.id, key: BOARD.key, action: 'name', name });
     if (r && r.error === 'name') { toast("That name can't go on the scoreboard. Try another.", true); return; }
-    BOARD.name = name; BOARD.named = true; boardSave(); toast(`Saved. You're ${BOARD.name} on the scoreboard.`);
+    BOARD.name = name; BOARD.named = true; BOARD.real = true; boardSave(); toast(`Saved. You're ${BOARD.name} on the scoreboard.`);
     if (el.dataset.where === 'title') showModal(titleHTML(loadSaved())); else openBoard(); },
   acctCreate: async () => {
     try { const r = await passkeyCreate(); toast('Passkey set up.'); if (r.recovery) showModal(codeHTML(r.recovery)); else acctFill(); }
@@ -7353,7 +7368,7 @@ const ACTS = {
 };
 function onAct(e) {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
-  const f = ACTS[el.dataset.act]; if (f) { e.preventDefault(); f(el); }
+  const f = ACTS[el.dataset.act]; if (f) { e.preventDefault(); f(el); if (DECIDE.has(el.dataset.act) && inPlay) markReal(); }
 }
 document.addEventListener('click', onAct);
 $('#ticker').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ACTS.newsAll(); } });
