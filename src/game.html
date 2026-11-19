@@ -2892,6 +2892,28 @@ function savedGamesHTML(from) {
 async function cloudGames(id) {
   try { const r = await fetch('api/save?id=' + encodeURIComponent(id) + '&key=' + encodeURIComponent(BOARD.key), { cache: 'no-store' }); if (!r.ok) return r.status === 503 ? { off: true } : null; return await r.json(); } catch (e) { return null; }
 }
+// Games the owner has taken away from this player (one started by mistake, say): when the game opens, this device drops
+// them too, and if one was the game in play here, the last other game takes its place on the title card
+async function syncDrops() {
+  if (!BOARD.on || !BOARD.real || !BOARD.id || navigator.onLine === false) return;
+  const d = await cloudGames(BOARD.id), gone = (d && d.dropped) || [];
+  if (gone.length) dropLocal(gone);
+}
+function dropLocal(gone) {
+  try {
+    const g = loadGames(); let changed = false;
+    for (const id of Object.keys(g)) if (gone.includes(id) || gone.includes(gameIdIn(g[id].S))) { delete g[id]; changed = true; }
+    const cur = loadSaved();
+    if (cur && gone.includes(cur.gameId) && !inPlay) {
+      const next = Object.values(g).sort((a, b) => b.at - a.at)[0];
+      if (next) localStorage.setItem(SAVE_KEY, next.S); else localStorage.removeItem(SAVE_KEY);
+      changed = true;
+    }
+    if (!changed) return;
+    localStorage.setItem(GAMES_KEY, JSON.stringify(g));
+    if (ui.modalOpen && $('#modalBody [data-act="continue"],#modalBody [data-act="play"]')) showModal(titleHTML(loadSaved()));
+  } catch (e) { /* storage blocked */ }
+}
 const cloudRows = games => games.map(g => { const cur = inPlay && S && S.gameId === g.game;
   return `<li><button class="item" data-act="cloudLoad" data-game="${esc(g.game)}" ${cur ? 'disabled' : ''}>${GAME_GLYPH()}<span><b>${esc(g.company || 'A company')}</b><small>${esc(g.when || String(g.year))}${g.worth != null ? ` · worth ${money(g.worth)}` : ''} · saved ${boardAgo(Date.now() - g.at)}</small></span><span class="side">${cur ? 'Playing now' : 'Play'}</span></button></li>`; }).join('');
 async function fillCloudList() {
@@ -8649,7 +8671,7 @@ function start(data) {
   readColors(); buildNav(); initNodes(); buildMapPaths(); buildIslets(); gfxInit(); loadRelief(); loadDepth();
   resize(); renderBase();
   if (data && data.S && data.S.v === 1) { S = data.S; afterLoad(); inPlay = true; }
-  else { newGame(); afterLoad(); showModal(titleHTML(loadSaved())); if (BOARD.on) arriveFromMove(); }
+  else { newGame(); afterLoad(); showModal(titleHTML(loadSaved())); if (BOARD.on) arriveFromMove().then(moved => { if (!moved) syncDrops(); }); }
   syncSpeed(); syncSoundBtn();
   window.addEventListener('resize', () => { resize(); });
   if (window.ResizeObserver) new ResizeObserver(() => resize()).observe($('#mapArea'));

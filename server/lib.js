@@ -38,6 +38,8 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`,
   // players made one: a device that still holds the old id (and a key now the other player's) is pointed to the other
   `CREATE TABLE IF NOT EXISTS merges (old TEXT PRIMARY KEY, target TEXT NOT NULL, at INTEGER)`,
+  // games the owner has taken away from a player: not taken again if a device sends them, and the devices drop them
+  `CREATE TABLE IF NOT EXISTS drops (player TEXT NOT NULL, game TEXT NOT NULL, at INTEGER, PRIMARY KEY (player, game))`,
 ];
 let ready = null;
 export function ensure(env) {
@@ -169,6 +171,27 @@ export async function mergePlayers(env, x, y) {
   await env.DB.batch(stmts);
   return env.DB.prepare(`SELECT * FROM players WHERE id = ?`).bind(keep.id).first();
 }
+// The owner takes a game away from a player (one they started by mistake, say): gone from the online saves, never taken
+// again, and dropped by their devices the next time the game opens (the game in play there becomes their last other game).
+// If it was the game the board shows them playing, the board shows their last other game instead.
+export async function dropGame(env, player, game) {
+  const p = await env.DB.prepare(`SELECT * FROM players WHERE id = ?`).bind(player).first(); if (!p) return false;
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM saves WHERE player = ? AND game = ?`).bind(player, game),
+    env.DB.prepare(`INSERT OR REPLACE INTO drops (player, game, at) VALUES (?, ?, ?)`).bind(player, game, Date.now()),
+  ]);
+  const cur = parseJSON(p.cur, {}) || {};
+  if (cur.game === game) {
+    const s = await env.DB.prepare(`SELECT game, mon, year, company, worth, data FROM saves WHERE player = ? ORDER BY at DESC LIMIT 1`).bind(player).first();
+    const best = parseJSON(p.best, {}) || {}, S = s ? parseJSON(s.data, {}) || {} : null;
+    const mine = S ? (S.tugs || []).filter(t => t.owner === 'p') : [];
+    const next = s ? { game: S.gameId || s.game, company: s.company, year: s.year, month: s.mon, worth: s.worth, title: best.game === (S.gameId || s.game) ? best.title || '' : '',
+      boats: mine.length, fleet: mine.reduce((a, t) => (a[t.model] = (a[t.model] || 0) + 1, a), {}) } : null;
+    await env.DB.prepare(`UPDATE players SET cur = ? WHERE id = ?`).bind(next ? JSON.stringify(next) : null, player).run();
+  }
+  return true;
+}
+export const droppedGames = async (env, player) => (await env.DB.prepare(`SELECT game FROM drops WHERE player = ?`).bind(player).all()).results.map(r => r.game);
 // Give a device a new key for a player (after signing in)
 export async function addKey(env, player, key, device) {
   if (!KEY.test(key || '')) return false;

@@ -1,7 +1,7 @@
 // Games saved online (at /api/save), so a player who loses a game, or plays on another device, can bring it back. Each
 // player keeps their last six games, each as it was last sent, in the D1 database (DB). Reading or saving needs one of
 // the player's device keys, so no one can read or overwrite another player's games from the ids on the public board.
-import { json, clip, num, ensure, playerFor, playerInfo, keyHash, GAME } from '../../server/lib.js';
+import { json, clip, num, ensure, playerFor, playerInfo, keyHash, droppedGames, GAME } from '../../server/lib.js';
 import * as legacy from '../../server/legacy-save.js';
 const KEEP = 6, MAX = 400000;
 
@@ -13,7 +13,7 @@ export async function onRequestGet(ctx) {
   const p = await playerFor(env, id, q.get('key') || '');
   if (!p) return json({ id, games: [], now: Date.now() });
   const { results } = await env.DB.prepare(`SELECT game, at, mon AS "when", year, company, worth, data FROM saves WHERE player = ? ORDER BY at DESC`).bind(p.id).all();
-  return json({ id: p.id, games: results, now: Date.now(), ...(p.from ? { player: playerInfo(p) } : {}) });
+  return json({ id: p.id, games: results, dropped: await droppedGames(env, p.id), now: Date.now(), ...(p.from ? { player: playerInfo(p) } : {}) });
 }
 
 export async function onRequestPost(ctx) {
@@ -30,6 +30,7 @@ export async function onRequestPost(ctx) {
   if (!g || g.v !== 1 || !Array.isArray(g.tugs) || !g.year) return json({ error: 'not a game' }, 400);
   const p = await playerFor(env, id, clip(r.key, 64), { claim: true, request });
   if (!p) return json({ error: 'not yours' }, 403);
+  if ((await droppedGames(env, p.id)).includes(game)) return json({ ok: true, dropped: game }); // taken away by the owner
   // A copy of a game that is behind the one already online (an older copy, played on another device) goes beside it, never
   // over it: under the game's id with a mark of this device, so both are kept and the one further on stays where it was
   let slot = game;

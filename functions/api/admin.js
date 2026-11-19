@@ -1,7 +1,7 @@
 // The owner's page (at /api/admin, used by admin.html): every player, and putting right a name or a player who shouldn't
 // be on the board. Only the players named in the ADMIN_PLAYER setting (their ids, comma-separated) may use it, from a
 // device signed in as them.
-import { json, clip, ensure, playerFor, isAdmin, parseJSON, sweep, mergePlayers } from '../../server/lib.js';
+import { json, clip, ensure, playerFor, isAdmin, parseJSON, sweep, mergePlayers, dropGame } from '../../server/lib.js';
 import { settlerName } from '../../server/names.js';
 
 async function admin(env, id, key) { const p = await playerFor(env, id, key); return p && isAdmin(env, p.id) ? p : null; }
@@ -14,7 +14,8 @@ export async function onRequestGet({ request, env }) {
   await sweep(env);
   const { results } = await env.DB.prepare(`SELECT p.*, (SELECT COUNT(*) FROM keys k WHERE k.player = p.id) AS devices, (SELECT COUNT(*) FROM passkeys k WHERE k.player = p.id) AS passkeys,
     (SELECT COUNT(*) FROM saves s WHERE s.player = p.id) AS saved FROM players p ORDER BY p.last DESC LIMIT 1000`).all();
-  const players = results.map(p => ({ id: p.id, name: p.name, named: !!p.named, hidden: !!p.hidden, last: p.last, first: p.first, minutes: p.minutes, sessions: p.sessions,
+  const saves = (await env.DB.prepare(`SELECT player, game, mon, year, worth, at FROM saves ORDER BY at DESC`).all()).results;
+  const players = results.map(p => ({ games: saves.filter(s => s.player === p.id).map(s => ({ game: s.game, when: [s.mon, s.year].filter(Boolean).join(' ').replace(/^(\w+) (\d+) \2$/, '$1 $2'), worth: s.worth, at: s.at })), id: p.id, name: p.name, named: !!p.named, hidden: !!p.hidden, last: p.last, first: p.first, minutes: p.minutes, sessions: p.sessions,
     best: parseJSON(p.best), cur: parseJSON(p.cur), place: parseJSON(p.place), device: p.device, devices: p.devices, passkeys: p.passkeys, saved: p.saved, recovery: !!p.recovery,
     // the same test as PLAYED in server/lib.js: a minute of play, or a passkey or recovery code
     played: (p.minutes || 0) >= 1 || p.passkeys > 0 || !!p.recovery }));
@@ -32,6 +33,7 @@ export async function onRequestPost({ request, env }) {
   if (r.action === 'hide' || r.action === 'show') await env.DB.prepare(`UPDATE players SET hidden = ? WHERE id = ?`).bind(r.action === 'hide' ? 1 : 0, t).run();
   else if (r.action === 'rename') { const name = settlerName(); await env.DB.prepare(`UPDATE players SET name = ?, named = 1 WHERE id = ?`).bind(name, t).run(); return json({ ok: true, name }); } // the new name sticks: the player's game takes it up
   else if (r.action === 'merge') { const kept = await mergePlayers(env, t, clip(r.into, 40)); return kept ? json({ ok: true, kept: kept.id, name: kept.name }) : json({ error: 'no such players' }, 400); } // two players who are one person
+  else if (r.action === 'dropGame') { if (!(await dropGame(env, t, clip(r.game, 40)))) return json({ error: 'no such player' }, 400); } // a game started by mistake
   else if (r.action === 'remove') await env.DB.batch(['players WHERE id', 'keys WHERE player', 'passkeys WHERE player', 'saves WHERE player'].map(w => env.DB.prepare(`DELETE FROM ${w} = ?`).bind(t)));
   else return json({ error: 'unknown action' }, 400);
   return json({ ok: true });
