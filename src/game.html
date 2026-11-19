@@ -8530,9 +8530,11 @@ function endIntro() {
     setTimeout(finish, still ? 1500 : audio ? 3000 : Math.max(2200, 3000 - since()));
   };
   el.addEventListener('click', go);
-  el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  // with a keyboard, Enter or the space bar, from anywhere while the opening is up
+  const key = e => { if (!document.getElementById('intro')) { document.removeEventListener('keydown', key); return; } if ((e.key === 'Enter' || e.key === ' ') && el.classList.contains('ready')) { e.preventDefault(); go(); } };
+  document.addEventListener('keydown', key);
   // the button once the logo has finished building (on a quick device the game is ready before it has)
-  if (audio) setTimeout(() => { el.classList.add('ready'); const b = el.querySelector('.i-btn'); if (b) b.focus({ preventScroll: true }); }, Math.max(0, 1800 - since()));
+  if (audio) setTimeout(() => el.classList.add('ready'), Math.max(0, 1800 - since()));
   else setTimeout(go, Math.max(0, 500 - since()));
 }
 function start(data) {
