@@ -5,6 +5,7 @@
 //  2. a second device signs in with the same passkey (as if synced by iCloud) and finds the first device's games
 //  3. a third signs in with the recovery code; a fourth tries a wrong one
 //  4. on the old address, a device moves its games; on the new one they arrive
+//  5. a person who played as two players moves an earlier copy of their game, and makes the two one
 // Starts the dev server itself, on port 8792.
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
@@ -110,6 +111,33 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   say('new site', `arrived as ${await me(O.p)} (was ${oldId}); url ${O.p.url()}`);
   say('new site', 'card: ' + (await text(O.p)).slice(0, 300));
   await O.p.screenshot({ path: `${OUT}/acct-moved.png` });
+
+  // 5. one person as two players (a Dock app or another browser kept its own storage): on the new address they play on to
+  //    a later day; the old address holds an earlier copy of the same game under a second player, and moves it. Asked,
+  //    they make the two one: one player, the copy further on in play, the earlier copy kept beside it, and the old
+  //    address's device, next time it reports, carries on as the one player
+  const M = await device('Mac');
+  await M.p.click('[data-act="play"]'); await sleep(500); await M.p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; T.S.company = 'Barr Towing'; });
+  await M.p.click('[data-act="bank"]'); await M.p.click('#modalBody [data-act="borrow"]'); await M.p.evaluate(() => { document.querySelector('#modal').hidden = true; window.__tugboat.ui.modalOpen = false; });
+  const early = await M.p.evaluate(() => JSON.stringify(window.__tugboat.S));
+  await M.p.evaluate(() => { const T = window.__tugboat; T.advance(40); T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; }); await M.p.click('#saveBtn'); await sleep(1500);
+  const mac = await M.p.evaluate(() => ({ id: JSON.parse(localStorage.getItem('tugboat-player')).id, game: window.__tugboat.S.gameId, day: Math.floor(window.__tugboat.S.day) }));
+  await M.p.goto(`http://tugboat-tycoon.pages.dev:${PORT}/`); await sleep(1200);
+  await M.p.evaluate(e => { const S = JSON.parse(e); localStorage.setItem('tugboat-tycoon-save-v1', e); localStorage.setItem('tugboat-tycoon-games-v1', JSON.stringify({ [S.gameId]: { at: Date.now(), when: 'May 1870', year: S.year, company: S.company, worth: 15000, S: e } })); }, early);
+  await M.p.reload(); await sleep(1200);
+  const twinId = await M.p.evaluate(() => JSON.parse(localStorage.getItem('tugboat-player')).id);
+  await M.p.click('#modalBody [data-act="continue"]'); await sleep(500); await M.p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; });
+  await settings(M.p); await sleep(500);
+  await Promise.all([M.p.waitForURL(/localhost/, { timeout: 15000 }), M.p.click('#acctBox [data-act="moveGames"]')]); await sleep(2500);
+  say('Mac', `played on to day ${mac.day} as ${mac.id.slice(0, 6)}…; moved an earlier copy (day ${Math.floor(JSON.parse(early).day)}) from ${twinId.slice(0, 6)}…: "${(await text(M.p)).slice(0, 70)}"`);
+  await M.p.click('#modalBody [data-act="mergeYes"]'); await sleep(2500);
+  const after = await M.p.evaluate(() => { const v = JSON.parse(localStorage.getItem('tugboat-player')), S = JSON.parse(localStorage.getItem('tugboat-tycoon-save-v1')); return { id: v.id, day: Math.floor(S.day), game: S.gameId }; });
+  const board = (await (await fetch(`${HOME}/api/board?id=${after.id}`)).json()).players.map(p => p.id);
+  say('Mac', `Add them -> plays as ${after.id.slice(0, 6)}… (kept ${after.id === mac.id ? 'the Mac\'s' : 'the old'} player); game in play at day ${after.day}; on the board: ${[mac.id, twinId].filter(i => board.includes(i)).map(i => i.slice(0, 6)).join(', ')}`);
+  const online = await M.p.evaluate(async () => { const v = JSON.parse(localStorage.getItem('tugboat-player')); return (await (await fetch(`api/save?id=${v.id}&key=${v.key}`)).json()).games.map(g => `${g.game} ${g.when}`); });
+  say('Mac', `online now: ${online.join(' | ')}`);
+  await M.p.goto(`http://tugboat-tycoon.pages.dev:${PORT}/`); await sleep(1200); await M.p.click('#modalBody [data-act="continue"]'); await sleep(2000);
+  say('Mac', `the old address next time: plays as ${(await M.p.evaluate(() => JSON.parse(localStorage.getItem('tugboat-player')).id)).slice(0, 6)}…`);
 
   console.log('errors', errs.length ? errs : '[]');
   await b.close(); srv.kill();

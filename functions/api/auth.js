@@ -37,31 +37,31 @@ export async function onRequestPost({ request, env }) {
     // ---- what this device's player has: for Settings ----
     if (a === 'status') {
       const p = await playerFor(env, id, key); if (!p) return json({ ok: true, known: false });
-      const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM passkeys WHERE player = ?`).bind(id).first('n');
-      return json({ ok: true, known: true, passkeys: n, recovery: !!p.recovery, admin: isAdmin(env, id), player: playerInfo(p) });
+      const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM passkeys WHERE player = ?`).bind(p.id).first('n');
+      return json({ ok: true, known: true, passkeys: n, recovery: !!p.recovery, admin: isAdmin(env, p.id), player: playerInfo(p) });
     }
     // ---- making a passkey for the player on this device ----
     if (a === 'register-begin') {
       const p = await playerFor(env, id, key, { claim: true, request }); if (!p) return json({ error: 'not yours' }, 403);
       // a player the board hasn't heard from yet takes this device's name, so the devices that sign in later take it too
       const sent = clip(r.name, 30);
-      if (!p.name && sent && nameOK(sent)) { await env.DB.prepare(`UPDATE players SET name = ? WHERE id = ? AND name = ''`).bind(sent, id).run(); p.name = sent; }
-      const { results } = await env.DB.prepare(`SELECT id FROM passkeys WHERE player = ?`).bind(id).all();
-      const ch = await challenge(env, 'reg', id), name = p.name || 'Tugboat Tycoon player';
+      if (!p.name && sent && nameOK(sent)) { await env.DB.prepare(`UPDATE players SET name = ? WHERE id = ? AND name = ''`).bind(sent, p.id).run(); p.name = sent; }
+      const { results } = await env.DB.prepare(`SELECT id FROM passkeys WHERE player = ?`).bind(p.id).all();
+      const ch = await challenge(env, 'reg', p.id), name = p.name || 'Tugboat Tycoon player';
       return json({ ok: true, challengeId: ch.id, publicKey: {
-        challenge: ch.c, rp: { id: rpId, name: 'Tugboat Tycoon' }, user: { id: b64u(new TextEncoder().encode(id)), name, displayName: name },
+        challenge: ch.c, rp: { id: rpId, name: 'Tugboat Tycoon' }, user: { id: b64u(new TextEncoder().encode(p.id)), name, displayName: name },
         pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }], timeout: 120000, attestation: 'none',
         authenticatorSelection: { residentKey: 'required', requireResidentKey: true, userVerification: 'preferred' },
         excludeCredentials: results.map(x => ({ type: 'public-key', id: x.id })) } });
     }
     if (a === 'register-finish') {
       const p = await playerFor(env, id, key); if (!p) return json({ error: 'not yours' }, 403);
-      const ch = await takeChallenge(env, r.challengeId, 'reg'); if (!ch || ch.player !== id) return json({ error: 'expired' }, 400);
+      const ch = await takeChallenge(env, r.challengeId, 'reg'); if (!ch || ch.player !== p.id) return json({ error: 'expired' }, 400);
       const pk = await verifyRegistration({ credential: r.credential, challenge: ch.challenge, origin, rpId });
       const now = Date.now();
-      await env.DB.prepare(`INSERT INTO passkeys (id, player, pub, alg, counter, created, last, device) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(pk.id, id, pk.pub, pk.alg, pk.counter, now, now, clip(r.device, 20)).run();
+      await env.DB.prepare(`INSERT INTO passkeys (id, player, pub, alg, counter, created, last, device) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(pk.id, p.id, pk.pub, pk.alg, pk.counter, now, now, clip(r.device, 20)).run();
       // the first passkey comes with a recovery code, shown once
-      const code = p.recovery ? null : await giveCode(env, id);
+      const code = p.recovery ? null : await giveCode(env, p.id);
       return json({ ok: true, recovery: code });
     }
     // ---- signing in on a device with a passkey ----
@@ -92,7 +92,7 @@ export async function onRequestPost({ request, env }) {
     // ---- a new recovery code (the old one stops working) ----
     if (a === 'new-code') {
       const p = await playerFor(env, id, key); if (!p) return json({ error: 'not yours' }, 403);
-      return json({ ok: true, recovery: await giveCode(env, id) });
+      return json({ ok: true, recovery: await giveCode(env, p.id) });
     }
     // ---- this device forgets the player ----
     if (a === 'signout') {

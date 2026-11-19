@@ -36,6 +36,8 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS tries (what TEXT, ip TEXT, at INTEGER)`,
   `CREATE INDEX IF NOT EXISTS tries_ip ON tries (what, ip, at)`,
   `CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)`,
+  // players made one: a device that still holds the old id (and a key now the other player's) is pointed to the other
+  `CREATE TABLE IF NOT EXISTS merges (old TEXT PRIMARY KEY, target TEXT NOT NULL, at INTEGER)`,
 ];
 let ready = null;
 export function ensure(env) {
@@ -88,11 +90,16 @@ export async function playerFor(env, id, key, { claim = false, request = null } 
   const h = await keyHash(key), now = Date.now();
   const k = await env.DB.prepare(`SELECT player FROM keys WHERE hash = ?`).bind(h).first();
   if (k) {
-    if (k.player !== id) return null;
+    // a device still using the id of a player since made one with another: it is that other player now (from: its old id,
+    // so the game on the device takes the new one)
+    const from = k.player !== id ? id : null;
+    if (from && (await mergedInto(env, id)) !== k.player) return null;
     await env.DB.prepare(`UPDATE keys SET last = ? WHERE hash = ?`).bind(now, h).run();
-    return env.DB.prepare(`SELECT * FROM players WHERE id = ?`).bind(id).first();
+    const p = await env.DB.prepare(`SELECT * FROM players WHERE id = ?`).bind(k.player).first();
+    return p && from ? { ...p, from } : p;
   }
   if (!claim) return null;
+  if (await mergedInto(env, id)) return null; // an id made one with another player isn't made again
   const p = await env.DB.prepare(`SELECT * FROM players WHERE id = ?`).bind(id).first();
   if (p) {
     const n = await env.DB.prepare(`SELECT COUNT(*) AS n FROM keys WHERE player = ?`).bind(id).first('n');
@@ -121,6 +128,47 @@ export async function sweep(env) {
   const idle = `SELECT id FROM players WHERE NOT ${PLAYED} AND last < ${now - 7 * 864e5}`;
   await env.DB.batch(['saves WHERE player', 'keys WHERE player', 'players WHERE id'].map(w => env.DB.prepare(`DELETE FROM ${w} IN (${idle})`)));
 }
+const mergedInto = (env, id) => env.DB.prepare(`SELECT target FROM merges WHERE old = ?`).bind(id).first('target');
+// How far on a saved game is: its day
+export const dayOf = data => { try { return Number(JSON.parse(data).day) || 0; } catch (e) { return 0; } };
+
+// Two players made one (a person who played as two: on two devices, or at both addresses). The one with a passkey or a
+// recovery code is kept, or else the one who has played longer; the other's devices, passkeys and games become the kept
+// one's, with the better best game and both players' time. Where both have the same game, the copy further on keeps
+// its place and the other is kept beside it, so nothing is lost. Returns the kept player.
+export async function mergePlayers(env, x, y) {
+  const get = id => env.DB.prepare(`SELECT p.*, (SELECT COUNT(*) FROM passkeys k WHERE k.player = p.id) AS pk FROM players p WHERE p.id = ?`).bind(id).first();
+  const A = await get(x), B = await get(y);
+  if (!A || !B || A.id === B.id) return A || B;
+  const safe = p => (p.pk || p.recovery) ? 1 : 0;
+  const [keep, gone] = (safe(A) - safe(B) || (A.minutes || 0) - (B.minutes || 0)) >= 0 ? [A, B] : [B, A];
+  const saves = async id => (await env.DB.prepare(`SELECT game, data FROM saves WHERE player = ?`).bind(id).all()).results;
+  const mine = new Map((await saves(keep.id)).map(s => [s.game, dayOf(s.data)])), stmts = [];
+  for (const s of await saves(gone.id)) {
+    let game = s.game;
+    if (mine.has(game)) {
+      const theirs = dayOf(s.data), branch = (g, who) => (g + 'x' + who.slice(0, 4)).slice(0, 40);
+      if (theirs > mine.get(game)) stmts.push(env.DB.prepare(`UPDATE saves SET game = ? WHERE player = ? AND game = ?`).bind(branch(game, keep.id), keep.id, game));
+      else game = branch(game, gone.id);
+    }
+    stmts.push(env.DB.prepare(`INSERT OR REPLACE INTO saves (player, game, at, mon, year, company, worth, data) SELECT ?, ?, at, mon, year, company, worth, data FROM saves WHERE player = ? AND game = ?`).bind(keep.id, game, gone.id, s.game));
+  }
+  const better = (gone.best_worth || 0) > (keep.best_worth || 0);
+  const games = JSON.stringify([...new Set([...parseJSON(keep.games, []), ...parseJSON(gone.games, [])])].slice(-40));
+  stmts.push(
+    env.DB.prepare(`DELETE FROM saves WHERE player = ?`).bind(gone.id),
+    env.DB.prepare(`UPDATE keys SET player = ? WHERE player = ?`).bind(keep.id, gone.id),
+    env.DB.prepare(`UPDATE passkeys SET player = ? WHERE player = ?`).bind(keep.id, gone.id),
+    env.DB.prepare(`DELETE FROM players WHERE id = ?`).bind(gone.id),
+    env.DB.prepare(`UPDATE players SET minutes = ?, sessions = ?, first = ?, last = ?, games = ?, best = ?, best_worth = ?, recovery = COALESCE(recovery, ?) WHERE id = ?`).bind(
+      Math.round(((keep.minutes || 0) + (gone.minutes || 0)) * 10) / 10, (keep.sessions || 0) + (gone.sessions || 0), Math.min(keep.first || Date.now(), gone.first || Date.now()),
+      Math.max(keep.last || 0, gone.last || 0), games, better ? gone.best : keep.best, better ? gone.best_worth : keep.best_worth, gone.recovery, keep.id),
+    env.DB.prepare(`UPDATE merges SET target = ? WHERE target = ?`).bind(keep.id, gone.id),
+    env.DB.prepare(`INSERT OR REPLACE INTO merges (old, target, at) VALUES (?, ?, ?)`).bind(gone.id, keep.id, Date.now()),
+  );
+  await env.DB.batch(stmts);
+  return env.DB.prepare(`SELECT * FROM players WHERE id = ?`).bind(keep.id).first();
+}
 // Give a device a new key for a player (after signing in)
 export async function addKey(env, player, key, device) {
   if (!KEY.test(key || '')) return false;
@@ -140,4 +188,4 @@ export async function allow(env, what, request, n, ms) {
 export const isAdmin = (env, id) => !!id && String(env.ADMIN_PLAYER || '').split(',').map(s => s.trim()).filter(Boolean).includes(id);
 // What the game needs to know about its own player
 // (safe: the player has a passkey and a recovery code, so their games can come back if a device is lost)
-export const playerInfo = p => ({ id: p.id, name: p.name, named: !!p.named, hidePlace: !!p.hide_place, safe: !!p.recovery });
+export const playerInfo = p => ({ id: p.id, name: p.name, named: !!p.named, hidePlace: !!p.hide_place, safe: !!p.recovery, ...(p.from ? { from: p.from } : {}) });

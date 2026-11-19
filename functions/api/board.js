@@ -38,16 +38,17 @@ export async function onRequestPost(ctx) {
   let r; try { r = await request.json(); } catch (e) { return json({ error: 'bad request' }, 400); }
   const id = clip(r.id, 40), p = await playerFor(env, id, clip(r.key, 64), { claim: true, request });
   if (!p) return json({ error: 'not yours' }, 403);
+  const pid = p.id; // (the player the key belongs to: another than id when the two were made one)
   const now = Date.now();
   // a new name for the board, if it is a decent one
   if (r.action === 'name') {
     const name = clip(r.name, 30);
     if (!nameOK(name)) return json({ ok: false, error: 'name', name: p.name });
-    await env.DB.prepare(`UPDATE players SET name = ?, named = 1 WHERE id = ?`).bind(name, id).run();
+    await env.DB.prepare(`UPDATE players SET name = ?, named = 1 WHERE id = ?`).bind(name, pid).run();
     return json({ ok: true, name });
   }
   // a game can take itself off the board, and come back
-  if (r.remove || r.action === 'hide') { await env.DB.prepare(`UPDATE players SET hidden = 1 WHERE id = ?`).bind(id).run(); return json({ ok: true, removed: true }); }
+  if (r.remove || r.action === 'hide') { await env.DB.prepare(`UPDATE players SET hidden = 1 WHERE id = ?`).bind(pid).run(); return json({ ok: true, removed: true }); }
   const game = clip(r.game, 40), worth = num(r.worth, -1e9, 1e12);
   const cur = { game: game || null, company: clip(r.company, 60), year: num(r.year, 1870, 2100), month: clip(r.month, 12) || null, worth, title: clip(r.title, 40), boats: num(r.boats, 0, 999), fleet: cleanFleet(r.fleet) };
   let best = parseJSON(p.best);
@@ -58,6 +59,6 @@ export async function onRequestPost(ctx) {
   if (!name || (!p.named && sent && sent !== name)) name = sent && nameOK(sent) ? sent : name || settlerName();
   await env.DB.prepare(`UPDATE players SET name = ?, last = ?, minutes = ?, sessions = ?, cur = ?, best = ?, best_worth = ?, games = ?, place = ?, hide_place = ?, device = ?, app = ?, hidden = 0 WHERE id = ?`).bind(
     name, now, Math.round(((p.minutes || 0) + (num(r.minutes, 0, 15) || 0)) * 10) / 10, (p.sessions || 0) + (r.start ? 1 : 0), JSON.stringify(cur), best ? JSON.stringify(best) : null, best ? best.worth : null,
-    JSON.stringify(games), JSON.stringify(placeOf(request, !!r.hidePlace)), r.hidePlace ? 1 : 0, clip(r.device, 20), r.app ? 1 : 0, id).run();
+    JSON.stringify(games), JSON.stringify(placeOf(request, !!r.hidePlace)), r.hidePlace ? 1 : 0, clip(r.device, 20), r.app ? 1 : 0, pid).run();
   return json({ ok: true, player: playerInfo({ ...p, name }) });
 }

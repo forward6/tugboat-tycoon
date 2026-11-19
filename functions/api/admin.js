@@ -1,7 +1,7 @@
 // The owner's page (at /api/admin, used by admin.html): every player, and putting right a name or a player who shouldn't
 // be on the board. Only the players named in the ADMIN_PLAYER setting (their ids, comma-separated) may use it, from a
 // device signed in as them.
-import { json, clip, ensure, playerFor, isAdmin, parseJSON, sweep } from '../../server/lib.js';
+import { json, clip, ensure, playerFor, isAdmin, parseJSON, sweep, mergePlayers } from '../../server/lib.js';
 import { settlerName } from '../../server/names.js';
 
 async function admin(env, id, key) { const p = await playerFor(env, id, key); return p && isAdmin(env, p.id) ? p : null; }
@@ -31,6 +31,7 @@ export async function onRequestPost({ request, env }) {
   const t = clip(r.target, 40);
   if (r.action === 'hide' || r.action === 'show') await env.DB.prepare(`UPDATE players SET hidden = ? WHERE id = ?`).bind(r.action === 'hide' ? 1 : 0, t).run();
   else if (r.action === 'rename') { const name = settlerName(); await env.DB.prepare(`UPDATE players SET name = ?, named = 1 WHERE id = ?`).bind(name, t).run(); return json({ ok: true, name }); } // the new name sticks: the player's game takes it up
+  else if (r.action === 'merge') { const kept = await mergePlayers(env, t, clip(r.into, 40)); return kept ? json({ ok: true, kept: kept.id, name: kept.name }) : json({ error: 'no such players' }, 400); } // two players who are one person
   else if (r.action === 'remove') await env.DB.batch(['players WHERE id', 'keys WHERE player', 'passkeys WHERE player', 'saves WHERE player'].map(w => env.DB.prepare(`DELETE FROM ${w} = ?`).bind(t)));
   else return json({ error: 'unknown action' }, 400);
   return json({ ok: true });

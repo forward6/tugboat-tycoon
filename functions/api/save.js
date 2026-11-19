@@ -1,7 +1,7 @@
 // Games saved online (at /api/save), so a player who loses a game, or plays on another device, can bring it back. Each
 // player keeps their last six games, each as it was last sent, in the D1 database (DB). Reading or saving needs one of
 // the player's device keys, so no one can read or overwrite another player's games from the ids on the public board.
-import { json, clip, num, ensure, playerFor, GAME } from '../../server/lib.js';
+import { json, clip, num, ensure, playerFor, playerInfo, keyHash, GAME } from '../../server/lib.js';
 import * as legacy from '../../server/legacy-save.js';
 const KEEP = 6, MAX = 400000;
 
@@ -12,8 +12,8 @@ export async function onRequestGet(ctx) {
   const q = new URL(request.url).searchParams, id = q.get('id') || '';
   const p = await playerFor(env, id, q.get('key') || '');
   if (!p) return json({ id, games: [], now: Date.now() });
-  const { results } = await env.DB.prepare(`SELECT game, at, mon AS "when", year, company, worth, data FROM saves WHERE player = ? ORDER BY at DESC`).bind(id).all();
-  return json({ id, games: results, now: Date.now() });
+  const { results } = await env.DB.prepare(`SELECT game, at, mon AS "when", year, company, worth, data FROM saves WHERE player = ? ORDER BY at DESC`).bind(p.id).all();
+  return json({ id: p.id, games: results, now: Date.now(), ...(p.from ? { player: playerInfo(p) } : {}) });
 }
 
 export async function onRequestPost(ctx) {
@@ -30,9 +30,14 @@ export async function onRequestPost(ctx) {
   if (!g || g.v !== 1 || !Array.isArray(g.tugs) || !g.year) return json({ error: 'not a game' }, 400);
   const p = await playerFor(env, id, clip(r.key, 64), { claim: true, request });
   if (!p) return json({ error: 'not yours' }, 403);
+  // A copy of a game that is behind the one already online (an older copy, played on another device) goes beside it, never
+  // over it: under the game's id with a mark of this device, so both are kept and the one further on stays where it was
+  let slot = game;
+  const held = await env.DB.prepare(`SELECT json_extract(data, '$.day') AS day FROM saves WHERE player = ? AND game = ?`).bind(p.id, game).first();
+  if (held && Number(held.day) > (Number(g.day) || 0) + 1) slot = (game + 'x' + (await keyHash(clip(r.key, 64))).slice(0, 4)).slice(0, 40);
   await env.DB.batch([
-    env.DB.prepare(`INSERT OR REPLACE INTO saves (player, game, at, mon, year, company, worth, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(id, game, Date.now(), clip(r.when, 20), num(r.year, 1870, 2100), clip(r.company, 60), num(r.worth, -1e9, 1e12), data),
-    env.DB.prepare(`DELETE FROM saves WHERE player = ? AND game NOT IN (SELECT game FROM saves WHERE player = ? ORDER BY at DESC LIMIT ${KEEP})`).bind(id, id),
+    env.DB.prepare(`INSERT OR REPLACE INTO saves (player, game, at, mon, year, company, worth, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(p.id, slot, Date.now(), clip(r.when, 20), num(r.year, 1870, 2100), clip(r.company, 60), num(r.worth, -1e9, 1e12), data),
+    env.DB.prepare(`DELETE FROM saves WHERE player = ? AND game NOT IN (SELECT game FROM saves WHERE player = ? ORDER BY at DESC LIMIT ${KEEP})`).bind(p.id, p.id),
   ]);
-  return json({ ok: true });
+  return json({ ok: true, game: slot, ...(p.from ? { player: playerInfo(p) } : {}) });
 }

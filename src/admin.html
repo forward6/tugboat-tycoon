@@ -51,7 +51,7 @@
         <td>${esc(p.cur && p.cur.company || '–')}<small>${esc([p.cur && p.cur.month, p.cur && p.cur.year].filter(Boolean).join(' '))} · ${money(p.cur && p.cur.worth)}</small></td>
         <td>${money(p.best && p.best.worth)}</td><td>${ago(p.last)}<small>${Math.round(p.minutes || 0)} min, ${p.sessions || 0} sessions</small></td>
         <td>${esc([p.place && p.place.region, p.place && p.place.country].filter(Boolean).join(', ') || '–')}<small>${esc(p.device || '')}</small></td>
-        <td><button data-a="rename" data-t="${esc(p.id)}">Settler's name</button><button data-a="${p.hidden ? 'show' : 'hide'}" data-t="${esc(p.id)}">${p.hidden ? 'Show' : 'Hide'}</button><button class="bad" data-a="remove" data-t="${esc(p.id)}">Delete</button></td></tr>`).join('')}
+        <td><button data-a="rename" data-t="${esc(p.id)}">Settler's name</button><button data-a="${p.hidden ? 'show' : 'hide'}" data-t="${esc(p.id)}">${p.hidden ? 'Show' : 'Hide'}</button><button data-a="merge" data-t="${esc(p.id)}">Same person as…</button><button class="bad" data-a="remove" data-t="${esc(p.id)}">Delete</button></td></tr>`).join('')}
       </tbody></table></div>`;
     const v = document.getElementById('visits'); if (v) v.onclick = () => { showVisits = !showVisits; draw(d); };
     document.getElementById('find').oninput = e => { filter = e.target.value.toLowerCase(); draw(d); const f = document.getElementById('find'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); };
@@ -60,7 +60,16 @@
     const b = e.target.closest('button[data-a]'); if (!b) return;
     const p = players.find(x => x.id === b.dataset.t);
     if (b.dataset.a === 'remove' && !confirm(`Delete ${p ? p.name : 'this player'} and all their saved games? This can't be undone.`)) return;
-    const r = await fetch('api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: me.id, key: me.key, action: b.dataset.a, target: b.dataset.t }) });
+    // two players who are one person: their devices, passkeys and games become one player's (the one with a passkey, or
+    // who has played longer); where both have the same game, both copies are kept
+    let into;
+    if (b.dataset.a === 'merge') {
+      const others = players.filter(x => x.id !== b.dataset.t && x.played);
+      const pick = prompt(`${p ? p.name : 'This player'} is the same person as which player? Type their player number (shown under their name):\n\n${others.map(x => `${x.id}  ${x.name}`).join('\n')}`);
+      into = (pick || '').trim(); if (!into) return;
+      if (!players.some(x => x.id === into)) { alert('No player has that number.'); return; }
+    }
+    const r = await fetch('api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: me.id, key: me.key, action: b.dataset.a, target: b.dataset.t, into }) });
     if (!r.ok) alert('That did not work (' + r.status + ').'); load();
   });
   load();

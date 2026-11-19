@@ -2827,7 +2827,10 @@ function cloudSave(force, leaving) {
   const body = JSON.stringify({ id: BOARD.id, key: BOARD.key, game: S.gameId, when: gameWhen(S), year: S.year, company: S.company, worth: Math.round(netWorth()), data: JSON.stringify(S) });
   CLOUD.last = now; CLOUD.sig = sig;
   const game = S.gameId, done = ok => { if (ok) { SAVED.cloud = Date.now(); SAVED.game = game; SAVED.cloudFailed = false; flashSaveBtn(); } else { CLOUD.sig = ''; SAVED.cloudFailed = true; } syncSaveBtn(); return ok; };
-  try { return fetch('api/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: body.length < 60000 }).then(r => done(r.ok), () => done(false)); }
+  try {
+    return fetch('api/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: body.length < 60000 })
+      .then(r => r.ok ? r.json().then(d => { followMerge(d && d.player); return true; }, () => true) : false).then(done, () => done(false));
+  }
   catch (e) { return Promise.resolve(done(false)); }
 }
 // The save mark in the top bar: a cloud, with a tick once the game in play has a copy online too; it pulses as each online
@@ -2856,6 +2859,9 @@ async function saveNow() {
 function beginPlay() {
   landTick(true);
   inPlay = true; lastSaveMonth = S && S.season ? monthOf(S.day) : null; saveGame(true);
+  // a game saved over the winter opens on the winter card, with its Fit out button (there was once no way on from it)
+  if (S && !S.season && !S.over) setTimeout(() => { if (inPlay && S && !S.season && !S.over && !ui.modalOpen) showModal(winterHTML()); }, 60);
+  syncSaveBtn();
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* not offered here */ }
 }
 // A save from before the shelf: put it on the shelf, with an id, so a new game can't push it out
@@ -5545,7 +5551,8 @@ function companyHTML() {
     ${staffHTML(mine)}
     <dt><button class="kvlink" data-act="season">${S.season ? 'This season so far' : 'Last season'}</button></dt><dd class="${profit < 0 ? 'neg' : 'pos'}"><button class="kvlink" data-act="season" aria-label="See the season boat by boat">${money(profit)} ›</button></dd>
   </dl>
-  <div class="row"><button class="btn primary wide" data-act="shipyard">Buy a boat</button><button class="btn wide" data-act="bank">Bank</button></div>
+  ${!S.season && !S.over ? `<div class="row"><button class="btn primary wide" data-act="backWinter">Fit out for ${S.year + 1}</button></div>` : ''}
+  <div class="row"><button class="btn${S.season ? ' primary' : ''} wide" data-act="shipyard">Buy a boat</button><button class="btn wide" data-act="bank">Bank</button></div>
   <div class="row"><button class="btn wide" data-act="select" data-t="exch">Stock exchange · ${fmtPx(sharePrice('me'))} a share${S.mkt.me.mine < SHARES ? `, you hold ${pctOf(S.mkt.me.mine)}` : ''}</button></div>
   <h3>Your fleet <span class="count">${mine.length}</span></h3>
   ${mine.length ? `<ul class="list">${mine.map(t => { const ks = boatContracts(t); return `<li><button class="item" data-act="select" data-t="tug" data-id="${t.id}">${tugGlyph(t)}<span><b>${esc(t.name)}</b><small>${esc(statusOf(t))}</small>${ks.length ? `<small class="oncontract">On contract: ${esc(ks.map(k => `${qtyText(k)}, ${runText(k)}`).join('; '))}</small>` : ''}</span><span class="side">${money(t.earn)}</span></button></li>`; }).join('')}</ul>` : '<p class="fine">You have no boats. Order one from the yards at Collingwood or Owen Sound.</p>'}
@@ -6786,6 +6793,12 @@ const toB64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(
 const fromB64u = s => { const t = s.replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(t + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0)); };
 async function apiPost(path, body) { try { const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const d = await r.json().catch(() => null); return d || { ok: false, error: `HTTP ${r.status}` }; } catch (e) { return { ok: false, error: 'offline' }; } }
 async function acctStatus() { ACCT.status = await apiPost('api/auth', { action: 'status', id: BOARD.id, key: BOARD.key }); return ACCT.status; }
+// The server says this device's player has been made one with another (the same person, playing as two): the device
+// carries on as that other player
+function followMerge(p) {
+  if (!p || !p.from || p.from !== BOARD.id || !p.id) return;
+  Object.assign(BOARD, { id: p.id, name: p.name || BOARD.name, named: !!p.named, safe: !!p.safe }); boardSave(); CLOUD.sig = '';
+}
 // This device becomes the player who signed in, with a key of its own
 function becomePlayer(p, key) { Object.assign(BOARD, { id: p.id, key, name: p.name || BOARD.name, named: !!p.named, hidePlace: !!p.hidePlace, known: true, real: true, safe: !!p.safe }); boardSave(); CLOUD.sig = ''; }
 async function passkeyCreate() {
@@ -6882,24 +6895,50 @@ async function moveGames() {
   location.href = `${NEW_HOME}/#move=${encodeURIComponent(r.code)}`;
 }
 // Arriving at the new address with a move code: become the same player and bring the games down onto this browser
+// Where both a browser and the online saves have a copy of the same game, the copy further on is the one kept
+const dayIn = x => { try { return Number((typeof x === 'string' ? JSON.parse(x) : x).day) || 0; } catch (e) { return 0; } };
+const gameIdIn = x => { try { return (typeof x === 'string' ? JSON.parse(x) : x).gameId || null; } catch (e) { return null; } };
+// A browser that already plays here as someone else is asked before anything changes: make the two one player, or
+// play as the one arriving
+let mergeReply = null;
+function askMerge(peek) {
+  const same = peek.name === BOARD.name, them = same ? `another ${esc(peek.name)}` : esc(peek.name || 'another player');
+  showModal(`<div class="rules"><span>tugboattycoon.com</span><span>Two players</span></div>
+  <h2>You already play here as ${esc(BOARD.name)}</h2>
+  <p class="desc">The games coming from the old address belong to ${them}${peek.games ? ` (${peek.games} game${peek.games === 1 ? '' : 's'})` : ''}. If that was you too, make the two one player: all the games together, and the better place on the scoreboard. Where both have the same game, you carry on with the copy that is further on, and the other is kept too.</p>
+  <div class="row"><button class="btn primary wide" data-act="mergeYes">Add them to ${esc(BOARD.name)}</button><button class="btn wide" data-act="mergeNo">Play as ${same ? 'the other one' : esc(peek.name || 'them')} instead</button></div>`);
+  return new Promise(res => { mergeReply = res; });
+}
 async function arriveFromMove() {
   const m = location.hash.match(/^#move=([A-Za-z0-9_-]+)/); if (!m) return false;
   try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine */ }
-  const key = newDeviceKey(), r = await apiPost('api/move', { action: 'claim', code: m[1], key, device: deviceName() });
+  let into = null;
+  if (BOARD.real && BOARD.id) {
+    const peek = await apiPost('api/move', { action: 'peek', code: m[1] });
+    if (peek.ok && peek.id !== BOARD.id && (await askMerge(peek)) === 'merge') into = { id: BOARD.id, key: BOARD.key };
+  }
+  const before = loadSaved(); // the game this browser had in play
+  const key = newDeviceKey(), r = await apiPost('api/move', { action: 'claim', code: m[1], key, device: deviceName(), into });
   if (!r.ok) { showModal(`<h2>That link has run out</h2><p class="desc">Open the game at its old address and tap <b>Move my games</b> again.</p><div class="row"><button class="btn primary wide" data-act="titleBack">Carry on</button></div>`); return true; }
   becomePlayer(r.player, key);
   const data = await cloudGames(BOARD.id), games = (data && data.games) || [];
   try {
     const g = loadGames(); let newest = null;
-    for (const x of games) { g[x.game] = { at: x.at, when: x.when, year: x.year, company: x.company, worth: x.worth, S: x.data }; if (!newest || x.at > newest.at) newest = x; }
+    for (const x of games) {
+      if (!newest || x.at > newest.at) newest = x;
+      const mine = g[x.game]; if (mine && dayIn(mine.S) >= dayIn(x.data)) continue; // never an earlier copy over one further on
+      g[x.game] = { at: x.at, when: x.when, year: x.year, company: x.company, worth: x.worth, S: x.data };
+    }
     for (const id of Object.keys(g).sort((a, b) => g[b].at - g[a].at).slice(GAMES_MAX)) delete g[id];
     localStorage.setItem(GAMES_KEY, JSON.stringify(g));
-    if (newest) localStorage.setItem(SAVE_KEY, newest.data);
+    // the game in play: the one this browser had (or a copy of it that is further on); a browser with none takes the last played
+    if (before) { const on = games.filter(x => gameIdIn(x.data) === before.gameId).sort((a, b) => dayIn(b.data) - dayIn(a.data))[0]; if (on && dayIn(on.data) > (before.day || 0)) localStorage.setItem(SAVE_KEY, on.data); }
+    else if (newest) localStorage.setItem(SAVE_KEY, newest.data);
   } catch (e) { /* no room: they are still online */ }
   const saved = loadSaved();
   showModal(`<div class="rules"><span>tugboattycoon.com</span><span>Welcome aboard</span></div>
   <h2>Your games are here, ${esc(BOARD.name)}</h2>
-  <p class="desc">${games.length ? `${games.length} game${games.length === 1 ? '' : 's'} came across, and your place on the scoreboard.` : 'Your place on the scoreboard came across.'}</p>
+  <p class="desc">${r.merged ? 'The two players are one now: all the games are here, and the better place on the scoreboard.' : games.length ? `${games.length} game${games.length === 1 ? '' : 's'} came across, and your place on the scoreboard.` : 'Your place on the scoreboard came across.'}</p>
   ${asApp() || !/iPad|iPhone|Macintosh/.test(navigator.userAgent) ? '' : '<p class="fine">To open the game from your home screen, add this page again: tap <b>Share</b>, then <b>Add to Home Screen</b>. You can delete the old one.</p>'}
   ${canPasskey() ? '<p class="fine">To keep your games safe and play them on your other devices, set up a passkey in Settings.</p>' : ''}
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button>` : '<button class="btn primary wide" data-act="titleBack">Carry on</button>'}</div>`);
@@ -6917,7 +6956,7 @@ function boardReport(start, leaving) {
     if (leaving && navigator.sendBeacon) navigator.sendBeacon('api/board', new Blob([body], { type: 'application/json' }));
     else fetch('api/board', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).then(r => r.ok ? r.json() : null).then(d => {
       // the board's name for this player is the one that counts (the owner may have changed it)
-      const p = d && d.player; if (p && p.id === BOARD.id) BOARD.safe = !!p.safe;
+      const p = d && d.player; followMerge(p); if (p && p.id === BOARD.id) BOARD.safe = !!p.safe;
       if (p && p.id === BOARD.id && p.name && p.name !== BOARD.name) { BOARD.name = p.name; BOARD.named = !!p.named; boardSave(); }
     }).catch(() => {});
   } catch (e) { /* offline, or no scoreboard */ }
@@ -7247,6 +7286,8 @@ const ACTS = {
   shareSheet: () => shareSheet(),
   shareLink: () => shareLink(),
   saveNow: () => saveNow(),
+  mergeYes: () => { const f = mergeReply; mergeReply = null; if (f) f('merge'); },
+  mergeNo: () => { const f = mergeReply; mergeReply = null; if (f) f('switch'); },
   nudgeNo: () => nextModal(),
   nudgeDone: () => nextModal(),
   nudgeYes: async () => {
