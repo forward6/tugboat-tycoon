@@ -211,8 +211,88 @@ def lockup_parts(ink=INK, sub='#56616b'):
     return name_d, name_w, line_d, line_w
 
 
+# ---- the icons: the badge simplified, so it still reads at the size of a home-screen icon or a browser tab ----
+NAVY = INK
+
+
+def rope_bold(n=28, twist_w=4.4, line_w=3.8, twists=True):
+    """The rope ring with fewer, heavier twists (or none, for the smallest icon)."""
+    out = [f'<circle cx="{C}" cy="{C}" r="{(R_IN + R_OUT) / 2}" fill="none" stroke="{ROPE}" stroke-width="{R_OUT - R_IN}"/>']
+    if twists:
+        d = []
+        for k in range(n):
+            a = 2 * math.pi * k / n
+            x1, y1 = C + (R_IN + 1.5) * math.cos(a - .07), C + (R_IN + 1.5) * math.sin(a - .07)
+            x2, y2 = C + (R_OUT - 1.5) * math.cos(a + .07), C + (R_OUT - 1.5) * math.sin(a + .07)
+            d.append(f'M{x1:.1f},{y1:.1f}L{x2:.1f},{y2:.1f}')
+        out.append(f'<path d="{"".join(d)}" stroke="{ROPE_DARK}" stroke-width="{twist_w}" stroke-linecap="round"/>')
+    out.append(f'<circle cx="{C}" cy="{C}" r="{R_OUT}" fill="none" stroke="{INK}" stroke-width="{line_w}"/>')
+    out.append(f'<circle cx="{C}" cy="{C}" r="{R_IN}" fill="none" stroke="{INK}" stroke-width="{line_w}"/>')
+    return ''.join(out)
+
+
+def pine_bold():
+    """The pine in four heavy tiers, on a thicker trunk."""
+    left, right = [], []
+    for k in range(25):
+        t = k / 24; x, y = bez(t, *TRUNK); w = 6.5 - 4.5 * t ** .8
+        left.append((x - w / 2, y)); right.append((x + w / 2, y))
+    out = [f'<path d="{smooth(left + right[::-1])}" fill="{INK}"/>']
+    for y, lee, weather, h in [(84, 22, 4, 9), (97, 33, 9, 10), (110, 27, 5, 9), (122, 15, 2, 7)]:
+        tx = trunk_x(y); a, b = tx - weather, tx + lee
+        top = [(a + (b - a) * i / 5, y - h * (.45 + .3 * math.sin(math.pi * i / 5.4))) for i in range(6)]
+        lobes = [(b - (b - a) * i / 4, y + h * (.2 + .35 * abs(math.sin(math.pi * i * 1.4 / 4 + .4)))) for i in range(1, 4)]
+        out.append(f'<path d="{smooth(top + [(b + 3, y - h * .25)] + lobes)}" fill="{INK}"/>')
+    return ''.join(out)
+
+
+def tug_at(k, cx, puffs=2, towline=False):
+    """The tug scaled by k about her waterline, centred at cx, with some of her smoke."""
+    dx, dy = cx - 90 * k, 160 - 160 * k
+    return f'<g transform="matrix({k} 0 0 {k} {dx:.2f} {dy:.2f})">{TOWLINE if towline else ""}{"".join(puff(*p) for p in PUFFS[:puffs])}{TUG}</g>'
+
+
+BOLD_WAVES = ''.join(f'<path d="{"".join(f"M{x},{y}q7,-4.5 14,0t14,0" for x in range(x0, 240, 64))}" fill="none" stroke="{PAPER}" stroke-width="3.2" stroke-linecap="round" opacity="{o}"/>'
+                     for y, x0, o in [(184, 22, .5), (204, 50, .4)])
+
+
+def icon_badge():
+    """The home-screen badge: the same picture with less in it, and the tug larger."""
+    disk = f'<g clip-path="url(#ttDisk)">{SKY}{SUN}{FAR}{SEA}{BOLD_WAVES}{ISLE}{pine_bold()}{tug_at(1.3, 100)}</g>'
+    return f'{DEFS}<circle cx="{C}" cy="{C}" r="{R_IN}" fill="{PAPER}"/>{disk}{rope_bold()}'
+
+
+def tiny_badge():
+    """The browser-tab badge: sky, sun, water and the tug, inside a plain ring."""
+    sun = f'<circle cx="168" cy="{HORIZON - 2}" r="26" fill="#e9a443"/>'
+    disk = f'<g clip-path="url(#ttDisk)">{SKY}{sun}{SEA}{ISLE}{tug_at(1.55, 104, puffs=1)}</g>'
+    return f'{DEFS}<circle cx="{C}" cy="{C}" r="{R_IN}" fill="{PAPER}"/>{disk}{rope_bold(twists=False, line_w=7)}'
+
+
+def icon_svg(size=512, share=.88):
+    """A square app icon: the badge on navy. For iPads, iPhones and browsers it fills 88%; Android's adaptive ("maskable")
+    icon keeps it within the middle 80%, the circle Android always shows whatever shape it cuts the icon to."""
+    k = share * size / (2 * R_OUT); t = size / 2 - C * k
+    return svg(f'<rect width="{size}" height="{size}" fill="{NAVY}"/><g transform="matrix({k:.4f} 0 0 {k:.4f} {t:.2f} {t:.2f})">{icon_badge()}</g>', size, size)
+
+
+def og_svg(name_d, name_w, line_d, line_w, W=1200, H=630):
+    """The picture a link to the game shows when it is shared: the badge, the name and its line."""
+    kb = 440 / (2 * R_OUT); bx, by = 330 - C * kb, H / 2 - C * kb
+    kt = 540 / name_w; tx = 885 - name_w * kt / 2
+    lk = kt * .95; lx = 885 - line_w * lk / 2
+    return svg(f'<rect width="{W}" height="{H}" fill="{PAPER}"/><rect x="18" y="18" width="{W - 36}" height="{H - 36}" fill="none" stroke="{GOLD}" stroke-width="2"/>'
+               f'<g transform="matrix({kb:.4f} 0 0 {kb:.4f} {bx:.1f} {by:.1f})">{badge()}</g>'
+               f'<path transform="matrix({kt:.4f} 0 0 {kt:.4f} {tx:.1f} 318)" d="{name_d}" fill="{INK}"/>'
+               f'<path d="M{885 - 110},350H{885 + 110}" stroke="{GOLD}" stroke-width="2"/>'
+               f'<path transform="matrix({lk:.4f} 0 0 {lk:.4f} {lx:.1f} 392)" d="{line_d}" fill="#56616b"/>', W, H)
+
+
 def main():
     (root / 'assets' / 'logo.svg').write_text(svg(badge()))
+    (root / 'assets' / 'icon.svg').write_text(icon_svg())
+    (root / 'assets' / 'icon-maskable.svg').write_text(icon_svg(share=.8))
+    (root / 'assets' / 'favicon.svg').write_text(svg(tiny_badge()))
     name_d, name_w, line_d, line_w = lockup_parts()
     W = max(name_w, line_w, 240) + 24
     lock = (f'<g transform="translate({(W - 240) / 2},0)">{badge()}</g>'
@@ -220,8 +300,9 @@ def main():
             f'<path d="M{W / 2 - 70},302H{W / 2 + 70}" stroke="{GOLD}" stroke-width="1.2"/>'
             f'<path transform="translate({(W - line_w) / 2:.1f},322)" d="{line_d}" fill="#56616b"/>')
     (root / 'assets' / 'logo-lockup.svg').write_text(svg(lock, vb=f'0 0 {W:.0f} 334'))
+    (root / 'assets' / 'og.svg').write_text(og_svg(name_d, name_w, line_d, line_w))
     (root / 'src' / 'intro.html').write_text(intro_html(name_d, name_w, line_d, line_w))
-    print('assets/logo.svg, assets/logo-lockup.svg, src/intro.html')
+    print('assets/logo.svg, logo-lockup.svg, icon.svg, icon-maskable.svg, favicon.svg, og.svg; src/intro.html (then node tools/icons.js for the PNGs)')
 
 
 # ---- the opening animation: the badge in layers, each moved and faded by CSS alone (transforms and opacity, which the
