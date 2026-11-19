@@ -139,4 +139,5 @@ export async function allow(env, what, request, n, ms) {
 }
 export const isAdmin = (env, id) => !!id && String(env.ADMIN_PLAYER || '').split(',').map(s => s.trim()).filter(Boolean).includes(id);
 // What the game needs to know about its own player
-export const playerInfo = p => ({ id: p.id, name: p.name, named: !!p.named, hidePlace: !!p.hide_place });
+// (safe: the player has a passkey and a recovery code, so their games can come back if a device is lost)
+export const playerInfo = p => ({ id: p.id, name: p.name, named: !!p.named, hidePlace: !!p.hide_place, safe: !!p.recovery });

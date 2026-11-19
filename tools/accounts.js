@@ -1,5 +1,6 @@
 // Players across devices, end to end, against tools/devserver.mjs: node tools/accounts.js <outdir>
-//  0. a robot opens the game and presses Open the season: the server hears nothing until a first decision (a loan)
+//  0. a robot opens the game and presses Open the season: the server hears nothing until a first decision (a loan); then
+//     the save mark gets its tick, and at the season's end a player with no passkey is asked, once, to set one up
 //  1. a device plays and sets up a passkey (Chromium's virtual authenticator), and is given a recovery code
 //  2. a second device signs in with the same passkey (as if synced by iCloud) and finds the first device's games
 //  3. a third signs in with the recovery code; a fourth tries a wrong one
@@ -40,6 +41,15 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await R.p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; });
   await R.p.click('[data-act="bank"]'); await R.p.click('#modalBody [data-act="borrow"]'); await R.p.waitForTimeout(2500);
   say('robot', `after a first decision (a loan): posts ${[...new Set(posts)].join(', ')}; on the board: ${await onBoard()}`);
+  say('robot', 'save mark: ' + (await R.p.evaluate(() => { const b = document.getElementById('saveBtn'); return `${b.classList.contains('online') ? 'ticked' : 'no tick'}, "${b.title}"`; })));
+  const card = () => R.p.evaluate(() => document.querySelector('#modal').hidden ? '(none)' : (document.querySelector('#modalBody h2') || {}).textContent);
+  // the season's notices close with Escape, one after another, until the passkey card or the winter card
+  const toWinter = async () => { await R.p.evaluate(() => window.__tugboat.advance(260)); for (let i = 0; i < 30 && !/safe|ice is in/i.test(await card()); i++) { await R.p.keyboard.press('Escape'); await sleep(120); } return card(); };
+  say('robot', `end of the season: "${await toWinter()}"`);
+  await R.p.click('#modalBody [data-act="nudgeNo"]'); await sleep(300);
+  say('robot', `Not now: "${await card()}"; fit out: ${!!(await R.p.$('#modalBody [data-act="startSeason"]'))}`);
+  await R.p.click('#modalBody [data-act="startSeason"]'); await sleep(400); await R.p.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; });
+  say('robot', `end of the next season: "${await toWinter()}" (asked only once)`);
   await R.ctx.close();
 
   // 1. the first device plays a little, saves, and sets up a passkey
