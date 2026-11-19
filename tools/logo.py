@@ -225,9 +225,25 @@ def main():
 
 
 # ---- the opening animation: the badge in layers, each moved and faded by CSS alone (transforms and opacity, which the
-# browser runs off the main thread), so it stays smooth while the game's big script loads and starts behind it ----
+# browser runs off the main thread), so it stays smooth while the game's big script loads and starts behind it.
+# Browsers play no sound before the first tap, so the opening comes in two parts: while the game loads, the scene and the
+# name build up and wait, with Loading and then a Tap to begin button; the tap brings the tug in, with the music and her
+# whistle (assets/opening.mp3, made by tools/opening_sound.py to these times). Players with the sound off need no tap.
+TOOT1, TOOT1_LEN = 0.90, 0.30   # seconds after the tap: her whistle, short then long
+TOOT2, TOOT2_LEN = 1.36, 0.62
+ARRIVE = 2.00                   # the music's arrival chord
+TUG_IN = 1.25                   # how long she takes to sail in
+WHISTLE_AT = (87 * TUG_K + TUG_DX, 111 * TUG_K + TUG_DY)  # the whistle, on the front of her funnel
+
+
+def steam(x, y):
+    return (f'<circle cx="{x:.1f}" cy="{y - 4:.1f}" r="4.2" fill="#fff"/><circle cx="{x + 2:.1f}" cy="{y - 8.5:.1f}" r="3.4" fill="#fff"/>'
+            f'<circle cx="{x - 1:.1f}" cy="{y - 12:.1f}" r="2.6" fill="#fff" opacity=".9"/>')
+
+
 def intro_html(name_d, name_w, line_d, line_w):
     L = lambda cls, body: f'<svg class="il {cls}" viewBox="0 0 240 240" aria-hidden="true">{body}</svg>'
+    pc = lambda x, y: f'{x / 2.4:.2f}% {y / 2.4:.2f}%'
     layers = ''.join([
         L('i-sky', f'{DEFS}<g clip-path="url(#ttDisk)"><circle cx="{C}" cy="{C}" r="{R_IN}" fill="{PAPER}"/>{SKY}{FAR}</g>'),
         L('i-sun', f'<g clip-path="url(#ttDisk)">{SUN}</g>'),
@@ -237,54 +253,72 @@ def intro_html(name_d, name_w, line_d, line_w):
         L('i-gulls', GULLS),
         f'<div class="il i-bob">{L("i-tug", f"<g transform=\"{TUG_T}\">{TOWLINE}{TUG}</g>")}</div>',
         ''.join(L(f'i-puff i-p{i}', puff(FUNNEL_TOP[0], FUNNEL_TOP[1], 6.5)) for i in range(4)),
+        L('i-steam i-s1', steam(*WHISTLE_AT)), L('i-steam i-s2', steam(*WHISTLE_AT)),
     ])
-    return f'''<!-- The opening: the logo, for three seconds while the game loads behind it (made by tools/logo.py) -->
-<div id="intro" aria-hidden="true">
+    return f"""<!-- The opening (made by tools/logo.py): the logo builds up while the game loads; a tap brings the tug in, with music -->
+<div id="intro" role="dialog" aria-label="Tugboat Tycoon">
   <div class="i-badge"><div class="i-disk">{layers}</div>{L('i-ring', rope())}</div>
-  <svg class="i-name" viewBox="0 -36 {name_w:.0f} 46"><path d="{name_d}"/></svg>
+  <svg class="i-name" viewBox="0 -36 {name_w:.0f} 46" aria-hidden="true"><path d="{name_d}"/></svg>
   <div class="i-rule"></div>
-  <svg class="i-line" viewBox="0 -10 {line_w:.0f} 13"><path d="{line_d}"/></svg>
+  <svg class="i-line" viewBox="0 -10 {line_w:.0f} 13" aria-hidden="true"><path d="{line_d}"/></svg>
+  <div class="i-go"><span class="i-wait">Loading</span><button class="i-btn" type="button">Tap to begin</button></div>
 </div>
-<script>window.__introAt = performance.now();</script>
+<script>window.__introAt = performance.now(); if (!matchMedia('(hover: none)').matches) document.querySelector('#intro .i-btn').textContent = 'Click to begin';</script>
 <style>
   #intro {{ position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
-    background: var(--surface, {PAPER}); color: var(--ink, {INK}); cursor: pointer; z-index: 1000; transition: opacity .45s ease, transform .45s ease; }}
+    background: var(--surface, {PAPER}); color: var(--ink, {INK}); z-index: 1000; transition: opacity .45s ease, transform .45s ease; -webkit-user-select: none; user-select: none; }}
+  #intro.ready, #intro.go {{ cursor: pointer; }}
   #intro.out {{ opacity: 0; transform: scale(1.03); pointer-events: none; }}
-  #intro .i-badge {{ width: min(62vw, 44vh, 380px); aspect-ratio: 1; position: relative; animation: iBadge .9s cubic-bezier(.2,.8,.2,1) both; }}
+  #intro .i-badge {{ width: min(62vw, 42vh, 380px); aspect-ratio: 1; position: relative; animation: iBadge .9s cubic-bezier(.2,.8,.2,1) both; }}
   #intro .i-disk, #intro .il {{ position: absolute; inset: 0; width: 100%; height: 100%; }}
   #intro .i-disk {{ clip-path: circle({R_IN / 2.4:.3f}% at 50% 50%); }}
-  #intro .il, #intro .i-name, #intro .i-rule, #intro .i-line {{ will-change: transform, opacity; }}
+  #intro .il, #intro .i-name, #intro .i-rule, #intro .i-line, #intro .i-go {{ will-change: transform, opacity; }}
+  /* the build-up, while the game loads */
   #intro .i-sky {{ animation: iFade .5s .15s both; }}
   #intro .i-sun {{ animation: iSun 1.2s .2s cubic-bezier(.2,.7,.3,1) both; }}
   #intro .i-sea {{ animation: iFade .4s .25s both; }}
   #intro .i-wavewrap {{ animation: iFade .5s .35s both; }}
   #intro .i-waves {{ position: absolute; top: 0; left: 0; width: 200%; height: 100%; animation: iWaves 6s linear infinite; }}
   #intro .i-isle {{ animation: iRise .8s .35s cubic-bezier(.2,.8,.2,1) both; }}
-  /* one moving animation to an element, so the browser can run each off the main thread: sailing in on the tug, bobbing on its wrapper */
-  #intro .i-tug {{ animation: iTugIn 1.3s .45s cubic-bezier(.15,.75,.25,1) both; }}
-  #intro .i-bob {{ animation: iBob 2.4s 1.75s ease-in-out infinite; transform-origin: 38% 64%; }}
-  #intro .i-puff {{ opacity: 0; transform-origin: {FUNNEL_TOP[0] / 2.4:.2f}% {FUNNEL_TOP[1] / 2.4:.2f}%; animation: iPuff 1.8s ease-out infinite; }}
   #intro .i-gulls {{ animation: iFade .6s .5s both, iGlide 5s .5s ease-in-out infinite alternate; }}
-  #intro .i-p0 {{ animation-delay: 1.1s; }} #intro .i-p1 {{ animation-delay: 1.55s; }} #intro .i-p2 {{ animation-delay: 2s; }} #intro .i-p3 {{ animation-delay: 2.45s; }}
   #intro .i-ring {{ animation: iRing 1s cubic-bezier(.2,.8,.2,1) both; }}
-  #intro .i-name {{ width: min(76vw, 500px); height: auto; margin-top: 3.2vh; fill: currentColor; animation: iWord .8s 1.15s cubic-bezier(.2,.8,.2,1) both; }}
-  #intro .i-rule {{ width: min(30vw, 170px); height: 1px; background: var(--rule, {GOLD}); margin: 1.4vh 0 1.2vh; transform-origin: 50% 50%; animation: iRuleIn .6s 1.55s cubic-bezier(.2,.8,.2,1) both; }}
-  #intro .i-line {{ width: min(52vw, 290px); height: auto; fill: var(--ink-2, #56616b); animation: iFade .6s 1.75s both; }}
+  #intro .i-name {{ width: min(76vw, 500px); height: auto; margin-top: 3vh; fill: currentColor; animation: iWord .8s .9s cubic-bezier(.2,.8,.2,1) both; }}
+  #intro .i-rule {{ width: min(30vw, 170px); height: 1px; background: var(--rule, {GOLD}); margin: 1.3vh 0 1.1vh; transform-origin: 50% 50%; animation: iRuleIn .6s 1.25s cubic-bezier(.2,.8,.2,1) both; }}
+  #intro .i-line {{ width: min(52vw, 290px); height: auto; fill: var(--ink-2, #56616b); animation: iFade .6s 1.4s both; }}
+  #intro .i-go {{ height: 64px; margin-top: 3.4vh; display: grid; place-items: center; transition: opacity .3s ease; }}
+  #intro .i-wait {{ font: 500 13px/1 "Alegreya Sans", system-ui, sans-serif; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2, #56616b); animation: iFade .5s 1.8s both, iPulse 1.6s 2.3s ease-in-out infinite; }}
+  #intro .i-btn {{ display: none; font: 700 18px/1 "Alegreya Sans", system-ui, sans-serif; padding: 15px 32px; border: 0; border-radius: 999px; background: var(--magenta, {MAGENTA}); color: var(--on-magenta, #fff); cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.18), 0 6px 18px rgba(0,0,0,.12); animation: iRise .45s cubic-bezier(.2,.8,.2,1) both; }}
+  #intro .i-btn:focus-visible {{ outline: 3px solid var(--ink, {INK}); outline-offset: 3px; }}
+  #intro.ready .i-wait {{ display: none; }} #intro.ready .i-btn {{ display: inline-block; }}
+  #intro.go .i-go {{ opacity: 0; pointer-events: none; }}
+  /* the tap: the tug sails in, steams, and blows her whistle with the music; one moving animation to an element, so each
+     runs off the main thread (sailing in on the tug, bobbing on its wrapper) */
+  #intro .i-tug {{ transform: translateX(-62%); }}
+  #intro .i-puff, #intro .i-steam {{ opacity: 0; }}
+  #intro.go .i-tug {{ animation: iTugIn {TUG_IN}s cubic-bezier(.15,.75,.25,1) both; }}
+  #intro.go .i-bob {{ animation: iBob 2.4s {TUG_IN}s ease-in-out infinite; transform-origin: 38% 64%; }}
+  #intro.go .i-puff {{ transform-origin: {pc(*FUNNEL_TOP)}; animation: iPuff 1.8s ease-out infinite; }}
+  #intro.go .i-p0 {{ animation-delay: .5s; }} #intro.go .i-p1 {{ animation-delay: .95s; }} #intro.go .i-p2 {{ animation-delay: 1.4s; }} #intro.go .i-p3 {{ animation-delay: 1.85s; }}
+  #intro.go .i-steam {{ transform-origin: {pc(*WHISTLE_AT)}; }}
+  #intro.go .i-s1 {{ animation: iSteam {TOOT1_LEN + .35:.2f}s {TOOT1:.2f}s ease-out both; }}
+  #intro.go .i-s2 {{ animation: iSteam {TOOT2_LEN + .4:.2f}s {TOOT2:.2f}s ease-out both; }}
   @keyframes iBadge {{ from {{ transform: scale(.86); }} to {{ transform: none; }} }}
   @keyframes iFade {{ from {{ opacity: 0; }} to {{ opacity: 1; }} }}
+  @keyframes iPulse {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: .35; }} }}
   @keyframes iSun {{ from {{ opacity: 0; transform: translateY(9%); }} to {{ opacity: 1; transform: none; }} }}
   @keyframes iRise {{ from {{ opacity: 0; transform: translateY(5%); }} to {{ opacity: 1; transform: none; }} }}
   @keyframes iWaves {{ from {{ transform: translateX(0); }} to {{ transform: translateX(-50%); }} }}
   @keyframes iTugIn {{ from {{ transform: translateX(-62%); }} to {{ transform: none; }} }}
   @keyframes iBob {{ 0%, 100% {{ transform: translateY(0) rotate(0); }} 50% {{ transform: translateY(.7%) rotate(-.8deg); }} }}
   @keyframes iPuff {{ 0% {{ opacity: 0; transform: translate(0, 0) scale(.35); }} 15% {{ opacity: .95; }} 100% {{ opacity: 0; transform: translate(-17%, -14%) scale(2.1); }} }}
+  @keyframes iSteam {{ 0% {{ opacity: 0; transform: translate(0, 0) scale(.4); }} 12% {{ opacity: 1; }} 70% {{ opacity: .85; }} 100% {{ opacity: 0; transform: translate(-3%, -7%) scale(1.5); }} }}
   @keyframes iGlide {{ from {{ transform: translate(0, 0); }} to {{ transform: translate(5%, -1.5%); }} }}
   @keyframes iRing {{ from {{ opacity: 0; transform: rotate(-70deg) scale(.8); }} to {{ opacity: 1; transform: none; }} }}
   @keyframes iWord {{ from {{ opacity: 0; transform: translateY(18%) scale(.96); }} to {{ opacity: 1; transform: none; }} }}
   @keyframes iRuleIn {{ from {{ transform: scaleX(0); }} to {{ transform: none; }} }}
-  @media (prefers-reduced-motion: reduce) {{ #intro *, #intro {{ animation: none !important; }} #intro .i-puff {{ opacity: 0; }} }}
+  @media (prefers-reduced-motion: reduce) {{ #intro *, #intro {{ animation: none !important; }} #intro .i-tug {{ transform: none; }} #intro .i-puff, #intro .i-steam {{ opacity: 0; }} }}
 </style>
-'''
+"""
 
 
 if __name__ == '__main__':

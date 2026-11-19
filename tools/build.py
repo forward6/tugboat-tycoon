@@ -1,5 +1,5 @@
 """Inline the map data into the game page: src/game.html + src/plans.js + data/map.json + data/routes.json + data/towns.json -> index.html"""
-import json, pathlib
+import base64, json, pathlib
 root = pathlib.Path(__file__).resolve().parent.parent
 src = (root / 'src' / 'game.html').read_text()
 data = json.loads((root / 'data' / 'map.json').read_text())
@@ -8,6 +8,9 @@ out = src.replace('/*MAP_DATA*/null', json.dumps(data, separators=(',', ':')))
 # the opening animation (src/intro.html, made by tools/logo.py), first thing in the page
 intro = root / 'src' / 'intro.html'
 out = out.replace('<!--INTRO-->', intro.read_text() if intro.exists() else '', 1)
+# its music and whistle, played on the tap (assets/opening.mp3, made by tools/opening_sound.py)
+mp3 = root / 'assets' / 'opening.mp3'
+out = out.replace("/*OPENING_MP3*/''", repr('data:audio/mpeg;base64,' + base64.b64encode(mp3.read_bytes()).decode()) if mp3.exists() else "''", 1)
 assert out != src, 'map placeholder not found'
 before = out
 out = out.replace('/*NET_ROUTES*/null', json.dumps(routes, separators=(',', ':')))
