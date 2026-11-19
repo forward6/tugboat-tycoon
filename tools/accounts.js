@@ -6,6 +6,7 @@
 //  3. a third signs in with the recovery code; a fourth tries a wrong one
 //  4. on the old address, a device moves its games; on the new one they arrive
 //  5. a person who played as two players moves an earlier copy of their game, and makes the two one
+//  6. a home-screen icon on the old address gets a moving code, and a new icon signs in with it and has the game
 // Starts the dev server itself, on port 8792.
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
@@ -138,6 +139,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   say('Mac', `online now: ${online.join(' | ')}`);
   await M.p.goto(`http://tugboat-tycoon.pages.dev:${PORT}/`); await sleep(1200); await M.p.click('#modalBody [data-act="continue"]'); await sleep(2000);
   say('Mac', `the old address next time: plays as ${(await M.p.evaluate(() => JSON.parse(localStorage.getItem('tugboat-player')).id)).slice(0, 6)}…`);
+
+  // 6. a home-screen icon on the old address: the move gives a code (its storage can't go anywhere), and a new icon for
+  //    the new address, signing in with it, has the game to carry on with
+  const icon = async (name, url) => {
+    const ctx = await b.newContext({ viewport: { width: 820, height: 1180 } }), p = await ctx.newPage();
+    p.on('pageerror', e => errs.push(`${name}: ${e.message}`));
+    await p.addInitScript(() => { try { localStorage.setItem('tugboat-tour-v1', '1'); localStorage.setItem('tugboat-advice-off', '1'); } catch (e) {} Object.defineProperty(navigator, 'standalone', { get: () => true }); });
+    await p.goto(url); await sleep(1200); return p;
+  };
+  const I = await icon('old icon', `http://tugboat-tycoon.pages.dev:${PORT}/`);
+  await I.click('[data-act="play"]'); await sleep(500); await I.evaluate(() => { const T = window.__tugboat; T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; T.S.company = 'Sinclair Towing'; T.advance(30); T.ui.queue = []; document.querySelector('#modal').hidden = true; T.ui.modalOpen = false; });
+  const iconGame = await I.evaluate(() => window.__tugboat.S.gameId);
+  await I.reload(); await sleep(1200);
+  say('old icon', 'title card: ' + (await I.evaluate(() => [...document.querySelectorAll('#modalBody button')].map(b => b.textContent.trim()).join(' | '))));
+  await I.click('#modalBody [data-act="moveCode"]'); await sleep(2500);
+  const homeCode = await I.evaluate(() => (document.getElementById('recCode') || {}).textContent || '');
+  say('old icon', `"${await I.evaluate(() => (document.querySelector('#modalBody h2') || {}).textContent)}": ${homeCode ? 'a code' : 'no code'}; steps: ${await I.evaluate(() => [...document.querySelectorAll('#modalBody ol.steps li')].map(l => l.textContent.trim().slice(0, 40)).join(' / '))}`);
+  const N = await icon('new icon', HOME);
+  await N.click('#modalBody [data-act="titleSignIn"]'); await N.fill('#recInput', homeCode); await N.click('#modalBody [data-act="acctRecover"]'); await sleep(2500);
+  say('new icon', 'after signing in with the code: ' + (await N.evaluate(() => [...document.querySelectorAll('#modalBody button')].map(b => b.textContent.trim()).filter(t => /Continue|Saved games/.test(t)).join(' | '))));
+  await N.click('#modalBody [data-act="continue"]'); await sleep(800);
+  say('new icon', `carries on with the same game: ${(await N.evaluate(() => window.__tugboat.S.gameId)) === iconGame}, ${await N.evaluate(() => window.__tugboat.S.company)}`);
 
   console.log('errors', errs.length ? errs : '[]');
   await b.close(); srv.kill();

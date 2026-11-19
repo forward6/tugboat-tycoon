@@ -327,6 +327,7 @@ table.cargo td.n{text-align:right}
 #adviceBtn[hidden]{display:none}
 #panel .fine a{color:var(--coast)}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--magenta);text-decoration:underline;cursor:pointer}
+.sheet ol.steps{margin:8px 0 12px;padding-left:24px}.sheet ol.steps li{margin:6px 0}
 .sheet .code{font:700 22px/1.3 var(--font-ui, inherit);letter-spacing:.06em;text-align:center;padding:14px;border:2px dashed var(--rule);border-radius:8px;user-select:all;word-break:break-word}
 .status.bad{color:var(--bad)}
 .advice{list-style:none;margin:8px 0 4px;padding:0;display:flex;flex-direction:column;gap:8px}
@@ -6649,7 +6650,7 @@ function titleHTML(saved) {
 // On the standalone copy in an iPad's browser: how to put it on the home screen, where it opens full screen like an app
 const asApp = () => navigator.standalone === true || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
 const homeHint = () => !inClaude && !asApp() && matchMedia('(pointer: coarse)').matches
-  ? '<p class="fine">To play full screen, like an app: tap the Share button at the top of Safari, then <b>Add to Home Screen</b>, and open the game from its new icon.</p>' : '';
+  ? `<p class="fine">To play full screen, like an app: tap the Share button at the top of Safari, then <b>Add to Home Screen</b>, and open the game from its new icon.${BOARD.on && !onOldHost && savedCount() ? ' A new icon keeps storage of its own, so your games need a code to come with you. <button class="linkbtn" data-act="homeCode">Get the code</button>' : ''}</p>` : '';
 // The events that bring a new kind of boat to the yards, and the one that brings the compound refit: each makes the papers
 const EVENT_BOAT = { tourists: 'excursion', hooker: 'hooker', woodwrecker: 'woodwrecker', alligator: 'alligator', steamfish: 'steamfish', steel: 'steelcompound', wrecker: 'steelwrecker',
   lifter: 'liftertug', gasfish: 'gasfish', dieselfish: 'dieselfish', dieseltug: 'diesel' };
@@ -6900,21 +6901,83 @@ function signInHTML(from) {
 }
 const acctMsg = (t, bad) => { const m = $('#acctMsg'); if (m) { m.textContent = t; m.hidden = !t; m.classList.toggle('bad', !!bad); } else if (t) toast(t, bad); };
 // Signed in: the player's online games, ready to load
-function signedIn(p) { toast(`Signed in as ${p.name}.`); boardReport(); showModal(savedGamesHTML('menu')); fillCloudList(); }
+async function signedIn(p) {
+  toast(`Signed in as ${p.name}.`); boardReport();
+  // a device with no game of its own (a new icon, a new iPad): the last game saved online is there to carry on with
+  if (!inPlay && !loadSaved()) {
+    const d = await cloudGames(BOARD.id), games = ((d && d.games) || []).slice().sort((a, b) => b.at - a.at);
+    if (games.length) {
+      try {
+        const g = loadGames(); for (const x of games) if (!g[x.game]) g[x.game] = { at: x.at, when: x.when, year: x.year, company: x.company, worth: x.worth, S: x.data };
+        for (const id of Object.keys(g).sort((a, b) => g[b].at - g[a].at).slice(GAMES_MAX)) delete g[id];
+        localStorage.setItem(GAMES_KEY, JSON.stringify(g)); localStorage.setItem(SAVE_KEY, games[0].data);
+        showModal(titleHTML(loadSaved())); return;
+      } catch (e) { /* no room: the list below still has them */ }
+    }
+  }
+  showModal(savedGamesHTML('menu')); fillCloudList();
+}
 
 // ---- the move from the old address ----
-const moveHTML = () => `<p class="fine"><b>Tugboat Tycoon has moved to tugboattycoon.com.</b> Move your games and your place on the scoreboard there, then play from the new address.</p>
+// A home-screen icon (or a Mac's Dock app) keeps storage of its own, and an icon made for the new address starts with
+// none. So from an icon the move goes nowhere: the icon's games go up online, and the player gets a code to type once in
+// the new icon (Sign in, then the recovery code), which is their recovery code from then on. In a browser tab, the move
+// takes the tab to the new address, with the games.
+const homeWords = () => deviceName() === 'Mac' ? { add: 'choose File, then <b>Add to Dock</b>', where: 'the Dock', old: 'the old one from the Dock' }
+  : { add: 'tap Share, then <b>Add to Home Screen</b>', where: 'your Home Screen', old: 'the old icon' };
+const moveHTML = () => asApp()
+  ? `<p class="fine"><b>Tugboat Tycoon has moved to tugboattycoon.com.</b> To play there from ${homeWords().where}, get a code for your games: you type it once, in the new icon.</p>
+  <div class="row"><button class="btn primary wide" data-act="moveCode">Get my moving code</button></div>`
+  : `<p class="fine"><b>Tugboat Tycoon has moved to tugboattycoon.com.</b> Move your games and your place on the scoreboard there, then play from the new address.</p>
   <div class="row"><button class="btn primary wide" data-act="moveGames">Move my games</button></div>`;
-async function moveGames() {
+// every game kept on this device goes up as an online save, the most recent last; how many went
+async function uploadShelf() {
   if (!BOARD.real) { BOARD.real = true; boardSave(); }
   if (inPlay) saveGame(true);
-  toast('Moving your games…');
-  // every game kept on this device goes up as an online save, the most recent last
-  const g = loadGames();
+  const g = loadGames(); let sent = 0;
   for (const id of Object.keys(g).sort((a, b) => g[a].at - g[b].at)) {
     const e = g[id];
-    await fetch('api/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: BOARD.id, key: BOARD.key, game: id, when: e.when, year: e.year, company: e.company, worth: e.worth, data: e.S }) }).catch(() => null);
+    const r = await fetch('api/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: BOARD.id, key: BOARD.key, game: id, when: e.when, year: e.year, company: e.company, worth: e.worth, data: e.S }) }).catch(() => null);
+    if (r && r.ok) sent++;
   }
+  return { games: Object.keys(g).length, sent };
+}
+// The code for a new icon, with the steps. From the old address: go to the new one first; on it: just add it.
+function homeCodeHTML(code, fromOld) {
+  const w = homeWords();
+  return `<div class="rules"><span>tugboattycoon.com</span><span>Your code</span></div>
+  <h2>Your code for the new icon</h2>
+  <p class="code" id="recCode">${esc(code)}</p>
+  <ol class="steps"><li>Write the code down, or copy it.</li>
+  ${fromOld ? `<li>Open Safari, go to <b>tugboattycoon.com</b>, and ${w.add}.</li>` : `<li>${w.add[0].toUpperCase() + w.add.slice(1)}.</li>`}
+  <li>Open Tugboat Tycoon from the new icon and tap <b>Sign in</b>. Type the code under <i>Or with your recovery code</i>, and tap <b>Sign in</b>. Your games and your place on the scoreboard come with you.</li>
+  ${fromOld ? `<li>Then you can delete ${w.old}.</li>` : ''}</ol>
+  <p class="fine">Keep the code. It is your recovery code too: it brings your games back if you ever lose this ${deviceWord()}.</p>
+  <div class="row"><button class="btn wide" data-act="acctCopy">Copy it</button><button class="btn primary wide" data-act="titleBack">Done</button></div>`;
+}
+// A player who already has a recovery code (or a passkey) uses that in the new icon; a new code replaces the old one
+const haveCodeHTML = fromOld => `<h2>You already have a recovery code</h2>
+  <p class="desc">${fromOld ? 'Open Safari, go to <b>tugboattycoon.com</b>, and ' + homeWords().add + '. ' : ''}In the new icon, tap <b>Sign in</b>, and sign in with your passkey, or type your recovery code under <i>Or with your recovery code</i>. Your games come with you.</p>
+  <p class="fine">Lost the code? A new one works instead, and the old one stops working.</p>
+  <div class="row"><button class="btn wide" data-act="${fromOld ? 'moveCodeNew' : 'homeCodeNew'}">Make a new code</button><button class="btn primary wide" data-act="titleBack">Done</button></div>`;
+async function giveHomeCode(fromOld, fresh) {
+  if (fromOld) {
+    toast('Saving your games online…');
+    const up = await uploadShelf();
+    if (!up.games) { showModal(`<h2>No games here yet</h2><p class="desc">There are no games on this ${deviceWord()} to move. Open Safari, go to <b>tugboattycoon.com</b>, and ${homeWords().add}.</p><div class="row"><button class="btn primary wide" data-act="titleBack">Done</button></div>`); return; }
+    if (!up.sent) { toast(navigator.onLine === false ? 'Moving needs a connection.' : "Your games couldn't be saved online just now. Try again in a moment.", true); return; }
+  }
+  const st = await acctStatus();
+  if (!st || !st.known) { toast(navigator.onLine === false ? 'This needs a connection.' : "That didn't work just now. Try again in a moment.", true); return; }
+  if ((st.recovery || st.passkeys) && !fresh) { showModal(haveCodeHTML(fromOld)); return; }
+  const r = await apiPost('api/auth', { action: 'new-code', id: BOARD.id, key: BOARD.key });
+  if (!r.ok || !r.recovery) { toast("That didn't work just now. Try again in a moment.", true); return; }
+  BOARD.safe = true;
+  showModal(homeCodeHTML(r.recovery, fromOld));
+}
+async function moveGames() {
+  toast('Moving your games…');
+  await uploadShelf();
   const r = await apiPost('api/move', { id: BOARD.id, key: BOARD.key });
   if (!r.ok) { toast(r.error === 'offline' ? 'Moving needs a connection.' : "The games couldn't be moved just now. Try again in a moment.", true); return; }
   location.href = `${NEW_HOME}/#move=${encodeURIComponent(r.code)}`;
@@ -6964,7 +7027,7 @@ async function arriveFromMove() {
   showModal(`<div class="rules"><span>tugboattycoon.com</span><span>Welcome aboard</span></div>
   <h2>Your games are here, ${esc(BOARD.name)}</h2>
   <p class="desc">${r.merged ? 'The two players are one now: all the games are here, and the better place on the scoreboard.' : games.length ? `${games.length} game${games.length === 1 ? '' : 's'} came across, and your place on the scoreboard.` : 'Your place on the scoreboard came across.'}</p>
-  ${asApp() || !/iPad|iPhone|Macintosh/.test(navigator.userAgent) ? '' : '<p class="fine">To open the game from your home screen, add this page again: tap <b>Share</b>, then <b>Add to Home Screen</b>. You can delete the old one.</p>'}
+  ${asApp() || !/iPad|iPhone|Macintosh/.test(navigator.userAgent) ? '' : `<p class="fine">To play from ${homeWords().where}: a new icon keeps storage of its own, so it needs a code to bring your games in. <button class="linkbtn" data-act="homeCode">Get the code and the steps</button></p>`}
   ${canPasskey() ? '<p class="fine">To keep your games safe and play them on your other devices, set up a passkey in Settings.</p>' : ''}
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button>` : '<button class="btn primary wide" data-act="titleBack">Carry on</button>'}</div>`);
   return true;
@@ -7311,6 +7374,10 @@ const ACTS = {
   shareSheet: () => shareSheet(),
   shareLink: () => shareLink(),
   saveNow: () => saveNow(),
+  moveCode: el => { el.disabled = true; giveHomeCode(true, false).finally(() => { el.disabled = false; }); },
+  moveCodeNew: () => giveHomeCode(true, true),
+  homeCode: () => giveHomeCode(false, false),
+  homeCodeNew: () => giveHomeCode(false, true),
   mergeYes: () => { const f = mergeReply; mergeReply = null; if (f) f('merge'); },
   mergeNo: () => { const f = mergeReply; mergeReply = null; if (f) f('switch'); },
   nudgeNo: () => nextModal(),
