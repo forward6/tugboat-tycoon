@@ -16,16 +16,30 @@ const row = p => {
   return { id: p.id, name: p.name, ...(parseJSON(p.cur, {}) || {}), best: parseJSON(p.best), place: parseJSON(p.place), device: p.device, app: !!p.app, last: p.last, first: p.first, minutes: p.minutes, sessions: p.sessions, gamesPlayed: Math.max(1, games.length) };
 };
 
+// Once an hour or so, the visits that never played (robots that open every new website, mostly) are cleared away after a
+// week: no minute played, no passkey, no recovery code and no online save
+let swept = 0;
+async function sweep(env) {
+  const now = Date.now(); if (now - swept < 3600e3) return; swept = now;
+  const idle = `SELECT id FROM players WHERE minutes < 1 AND last < ? AND recovery IS NULL AND id NOT IN (SELECT player FROM passkeys) AND id NOT IN (SELECT player FROM saves)`;
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM keys WHERE player IN (${idle})`).bind(now - 7 * 864e5),
+    env.DB.prepare(`DELETE FROM players WHERE id IN (${idle})`).bind(now - 7 * 864e5),
+  ]);
+}
+
 export async function onRequestGet(ctx) {
   const { request, env } = ctx;
   if (!env.DB) return legacy.onRequestGet(ctx);
   await ensure(env);
-  const { results } = await env.DB.prepare(`SELECT * FROM players WHERE hidden = 0 AND best_worth IS NOT NULL ORDER BY best_worth DESC LIMIT 200`).all();
+  await sweep(env);
+  // a player is on the public board once they have played a minute: a page opened by a robot never gets there
+  const { results } = await env.DB.prepare(`SELECT * FROM players WHERE hidden = 0 AND best_worth IS NOT NULL AND minutes >= 1 ORDER BY best_worth DESC LIMIT 200`).all();
   const players = results.map(row);
   // the asking player, wherever they are on it
   const me = new URL(request.url).searchParams.get('id');
   if (me && !players.some(p => p.id === me)) { const p = await env.DB.prepare(`SELECT * FROM players WHERE id = ? AND hidden = 0 AND best_worth IS NOT NULL`).bind(me).first(); if (p) players.push(row(p)); }
-  const total = await env.DB.prepare(`SELECT COUNT(*) AS n FROM players WHERE hidden = 0 AND best_worth IS NOT NULL`).first('n');
+  const total = await env.DB.prepare(`SELECT COUNT(*) AS n FROM players WHERE hidden = 0 AND best_worth IS NOT NULL AND minutes >= 1`).first('n');
   return json({ players, total, now: Date.now() });
 }
 
