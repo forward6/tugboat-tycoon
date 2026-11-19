@@ -8521,7 +8521,18 @@ function endIntro() {
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches, since = () => performance.now() - (window.__introAt || 0);
   let audio = null;
   if (SND.on && OPENING_MP3) { try { audio = new Audio(OPENING_MP3); audio.preload = 'auto'; } catch (e) { audio = null; } }
-  const finish = () => { if (el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 500); };
+  // while it is up, the keys are the opening's: Enter or the space bar starts it, Escape skips it, and nothing reaches the
+  // title card behind it (whose first button already has the focus)
+  const key = e => {
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (e.type !== 'keydown' || e.repeat) return;
+    if (e.key === 'Escape') finish(); else if ((e.key === 'Enter' || e.key === ' ') && (el.classList.contains('ready') || el.classList.contains('go'))) go();
+  };
+  const finish = () => {
+    if (el.classList.contains('out')) return; el.classList.add('out');
+    setTimeout(() => { el.remove(); for (const t of ['keydown', 'keyup', 'keypress']) window.removeEventListener(t, key, true); }, 500);
+  };
+  for (const t of ['keydown', 'keyup', 'keypress']) window.addEventListener(t, key, true);
   const go = () => {
     if (el.classList.contains('go')) { finish(); return; }
     el.classList.add('go');
@@ -8530,9 +8541,6 @@ function endIntro() {
     setTimeout(finish, still ? 1500 : audio ? 3000 : Math.max(2200, 3000 - since()));
   };
   el.addEventListener('click', go);
-  // with a keyboard, Enter or the space bar, from anywhere while the opening is up
-  const key = e => { if (!document.getElementById('intro')) { document.removeEventListener('keydown', key); return; } if ((e.key === 'Enter' || e.key === ' ') && el.classList.contains('ready')) { e.preventDefault(); go(); } };
-  document.addEventListener('keydown', key);
   // the button once the logo has finished building (on a quick device the game is ready before it has)
   if (audio) setTimeout(() => el.classList.add('ready'), Math.max(0, 1800 - since()));
   else setTimeout(go, Math.max(0, 500 - since()));
