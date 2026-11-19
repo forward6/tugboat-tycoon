@@ -2897,15 +2897,18 @@ async function cloudGames(id) {
 async function syncDrops() {
   if (!BOARD.on || !BOARD.real || !BOARD.id || navigator.onLine === false) return;
   const d = await cloudGames(BOARD.id), gone = (d && d.dropped) || [];
-  if (gone.length) dropLocal(gone);
+  if (gone.length) dropLocal(gone, (d && d.games) || []);
 }
-function dropLocal(gone) {
+function dropLocal(gone, online = []) {
   try {
     const g = loadGames(); let changed = false;
     for (const id of Object.keys(g)) if (gone.includes(id) || gone.includes(gameIdIn(g[id].S))) { delete g[id]; changed = true; }
     const cur = loadSaved();
     if (cur && gone.includes(cur.gameId) && !inPlay) {
-      const next = Object.values(g).sort((a, b) => b.at - a.at)[0];
+      // the last other game on this device; with none here, the last one saved online (it comes onto this device too)
+      let next = Object.values(g).sort((a, b) => b.at - a.at)[0];
+      const up = online.filter(x => !gone.includes(x.game)).sort((a, b) => b.at - a.at)[0];
+      if (!next && up) { next = g[up.game] = { at: up.at, when: up.when, year: up.year, company: up.company, worth: up.worth, S: up.data }; }
       if (next) localStorage.setItem(SAVE_KEY, next.S); else localStorage.removeItem(SAVE_KEY);
       changed = true;
     }
