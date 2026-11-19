@@ -417,6 +417,7 @@ table.cargo td.n{text-align:right}
 @media (prefers-reduced-motion: reduce){ .toast{animation:none} }
 </style>
 
+<!--INTRO-->
 <canvas id="water" aria-hidden="true" hidden></canvas>
 <canvas id="chart" aria-label="Map of Georgian Bay with your tugboats"></canvas>
 <canvas id="light" aria-hidden="true" hidden></canvas>
@@ -8508,6 +8509,17 @@ function harbourHit(x, y) {
    Boot
    ===================================================================== */
 function retheme() { readColors(); tileCache.clear(); LAND.key = landKey(); LAND.dirty = false; renderBase(); }
+// The opening (src/intro.html, made by tools/logo.py): the logo for three seconds from when it first showed, while the
+// game loads behind it, and never before the game is ready; a tap ends it sooner. Automated browsers (the tests, and robots)
+// go straight in, unless a test asks for it with window.__intro.
+function endIntro() {
+  const el = document.getElementById('intro'); if (!el) return;
+  if (navigator.webdriver && !window.__intro) { el.remove(); return; }
+  const hold = matchMedia('(prefers-reduced-motion: reduce)').matches ? 1500 : 3000;
+  const go = () => { if (el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 500); };
+  setTimeout(go, Math.max(0, hold - (performance.now() - (window.__introAt || 0))));
+  el.addEventListener('click', go);
+}
 function start(data) {
   readColors(); buildNav(); initNodes(); buildMapPaths(); buildIslets(); gfxInit(); loadRelief(); loadDepth();
   resize(); renderBase();
@@ -8522,6 +8534,7 @@ function start(data) {
   window.addEventListener('pagehide', () => { saveGame(true); cloudSave(true, true); });
   window.claude?.hot?.snapshot?.(() => ({ S }));
   requestAnimationFrame(t => { lastT = t; frame(t); });
+  endIntro();
   setTimeout(() => startPlayLog().then(() => { if (playLog.on && !playLog.owner && ui.modalOpen && $('#modalBody [data-act="play"],#modalBody [data-act="continue"]')) showModal(titleHTML(loadSaved())); }), 0);
 }
 window.__tugboatMap = MAP; window.__tugboat = { SND, sndInit, sndTick, songbird, loon, spawnJob, landTick, landPal, WRECKS, wrecksNow, wreckPos, w2s, BOARD, boardReport, openBoard, GFX, gfxSet, daylight, RELIEF, DEPTH, hIso, nodePos, hasHarbour, moveTraffic, get vehicles() { return vehicles; }, shipPose, isFish, renderBase, renderHI, hillshade, decodeContours, startRouteEdit, routeUSClash, usRun, valueAt, supplyRate, demandRate, shareText, shareCard, shareCompany, get shareCache() { return shareCache; }, SND, sndInit, whistle, foghorn, gull, bell, coin, thunder, setSound, sGain, bed, engineTick, own, insidersOf, ownersWill, offerOwners, floatSeasonEnd, makeOffer, acceptContract, contracts, contractFor, newTender, tenderBid, tenderPass, tenderRivals, rivalTenderDay, rivalOffer, rivalContracts, openTender, makeOffer, contractsDay, get TENDER() { return TENDER; }, openPlans, closePlans, get pv() { return pv; }, startTour, get tour() { return tour; }, TOUR, enterHarbour, exitHarbour, get HB() { return HB; }, connectionsHTML, railHTML, sharePrice, rivalValue, askingPrice, absorbRival, sellOwn, tradeShares, marketMood, coActive, rivalCap, RIVALS, EXCH, exListed, shipSheet(c, scale = 3) { const keep = ctx; ctx = c.getContext('2d'); ctx.fillStyle = COL.water; ctx.fillRect(0, 0, c.width, c.height); let y = 40;

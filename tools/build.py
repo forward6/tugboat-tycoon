@@ -5,6 +5,9 @@ src = (root / 'src' / 'game.html').read_text()
 data = json.loads((root / 'data' / 'map.json').read_text())
 routes = json.loads((root / 'data' / 'routes.json').read_text())
 out = src.replace('/*MAP_DATA*/null', json.dumps(data, separators=(',', ':')))
+# the opening animation (src/intro.html, made by tools/logo.py), first thing in the page
+intro = root / 'src' / 'intro.html'
+out = out.replace('<!--INTRO-->', intro.read_text() if intro.exists() else '', 1)
 assert out != src, 'map placeholder not found'
 before = out
 out = out.replace('/*NET_ROUTES*/null', json.dumps(routes, separators=(',', ':')))
