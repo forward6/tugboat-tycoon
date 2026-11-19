@@ -185,7 +185,7 @@ export async function dropGame(env, player, game) {
     const s = await env.DB.prepare(`SELECT game, mon, year, company, worth, data FROM saves WHERE player = ? ORDER BY at DESC LIMIT 1`).bind(player).first();
     const best = parseJSON(p.best, {}) || {}, S = s ? parseJSON(s.data, {}) || {} : null;
     const mine = S ? (S.tugs || []).filter(t => t.owner === 'p') : [];
-    const next = s ? { game: S.gameId || s.game, company: s.company, year: s.year, month: s.mon, worth: s.worth, title: best.game === (S.gameId || s.game) ? best.title || '' : '',
+    const next = s ? { game: S.gameId || s.game, company: s.company, year: s.year, month: String(s.mon || '').replace(/\s*\d{4}$/, '') || null, worth: s.worth, title: best.game === (S.gameId || s.game) ? best.title || '' : '',
       boats: mine.length, fleet: mine.reduce((a, t) => (a[t.model] = (a[t.model] || 0) + 1, a), {}) } : null;
     await env.DB.prepare(`UPDATE players SET cur = ? WHERE id = ?`).bind(next ? JSON.stringify(next) : null, player).run();
   }
