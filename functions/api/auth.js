@@ -4,6 +4,7 @@
 // device gets a key of its own. The server keeps no email, password or name beyond the one on the board.
 import { json, clip, ensure, playerFor, addKey, allow, isAdmin, playerInfo, randomId, b64u, sha256, hex, keyHash } from '../../server/lib.js';
 import { verifyRegistration, verifyAssertion } from '../../server/webauthn.js';
+import { nameOK } from '../../server/names.js';
 
 const WORDS = ['ANCHOR', 'BALSAM', 'BARGE', 'BEACON', 'BIRCH', 'BOOM', 'BOW', 'BRASS', 'BUOY', 'CABIN', 'CANOE', 'CAPE', 'CEDAR', 'CHART', 'CLEAT', 'COAL', 'COVE', 'CRANE', 'CREEK', 'DECK',
   'DOCK', 'DRIFT', 'EAGLE', 'EBB', 'FERN', 'FERRY', 'FISH', 'FLAG', 'FOG', 'GALE', 'GULL', 'HARBOUR', 'HATCH', 'HAWSER', 'HELM', 'HERON', 'HULL', 'INLET', 'ISLAND', 'JETTY', 'KEEL', 'KNOT',
@@ -42,6 +43,9 @@ export async function onRequestPost({ request, env }) {
     // ---- making a passkey for the player on this device ----
     if (a === 'register-begin') {
       const p = await playerFor(env, id, key, { claim: true, request }); if (!p) return json({ error: 'not yours' }, 403);
+      // a player the board hasn't heard from yet takes this device's name, so the devices that sign in later take it too
+      const sent = clip(r.name, 30);
+      if (!p.name && sent && nameOK(sent)) { await env.DB.prepare(`UPDATE players SET name = ? WHERE id = ? AND name = ''`).bind(sent, id).run(); p.name = sent; }
       const { results } = await env.DB.prepare(`SELECT id FROM passkeys WHERE player = ?`).bind(id).all();
       const ch = await challenge(env, 'reg', id), name = p.name || 'Tugboat Tycoon player';
       return json({ ok: true, challengeId: ch.id, publicKey: {

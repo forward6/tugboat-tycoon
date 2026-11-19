@@ -6744,7 +6744,7 @@ async function acctStatus() { ACCT.status = await apiPost('api/auth', { action: 
 // This device becomes the player who signed in, with a key of its own
 function becomePlayer(p, key) { Object.assign(BOARD, { id: p.id, key, name: p.name || BOARD.name, named: !!p.named, hidePlace: !!p.hidePlace, known: true }); boardSave(); CLOUD.sig = ''; }
 async function passkeyCreate() {
-  const b = await apiPost('api/auth', { action: 'register-begin', id: BOARD.id, key: BOARD.key }); if (!b.ok) throw new Error(b.error);
+  const b = await apiPost('api/auth', { action: 'register-begin', id: BOARD.id, key: BOARD.key, name: BOARD.name }); if (!b.ok) throw new Error(b.error);
   const pk = b.publicKey;
   const cred = await navigator.credentials.create({ publicKey: { ...pk, challenge: fromB64u(pk.challenge), user: { ...pk.user, id: fromB64u(pk.user.id) }, excludeCredentials: pk.excludeCredentials.map(c => ({ ...c, id: fromB64u(c.id) })) } });
   const r = await apiPost('api/auth', { action: 'register-finish', id: BOARD.id, key: BOARD.key, challengeId: b.challengeId, device: deviceName(),
