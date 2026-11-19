@@ -35,7 +35,7 @@ sw = f'''const CACHE = 'tugboat-{ver}';
 self.addEventListener('install', e => {{ self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png']))); }});
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {{
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || new URL(e.request.url).pathname.includes('/api/')) return; // the scoreboard and saves always come fresh, and aren't kept
   e.respondWith(fetch(e.request).then(r => {{
     if (r.ok || r.type === 'opaque') {{ const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }}
     return r;
@@ -50,6 +50,8 @@ site.mkdir()
 (site / 'sw.js').write_text(sw)
 (site / '.nojekyll').write_text('')
 for n in (180, 192, 512): shutil.copy(root / 'assets' / f'icon-{n}.png', site / f'icon-{n}.png')
+# the privacy page, and the owner's page of players
+for name in ('privacy.html', 'admin.html'): shutil.copy(root / 'src' / name, site / name)
 dist.mkdir(exist_ok=True)
 z = dist / 'tugboat-tycoon-site.zip'
 with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as f:

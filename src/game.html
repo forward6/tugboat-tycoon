@@ -321,6 +321,9 @@ table.cargo td.n{text-align:right}
 #adviceBtn b{min-width:24px;height:24px;border-radius:12px;background:var(--magenta);color:var(--on-magenta);display:grid;place-items:center;font-size:13px;padding:0 6px}
 #adviceBtn[hidden]{display:none}
 #panel .fine a{color:var(--coast)}
+.linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--magenta);text-decoration:underline;cursor:pointer}
+.sheet .code{font:700 22px/1.3 var(--font-ui, inherit);letter-spacing:.06em;text-align:center;padding:14px;border:2px dashed var(--rule);border-radius:8px;user-select:all;word-break:break-word}
+.status.bad{color:var(--bad)}
 .advice{list-style:none;margin:8px 0 4px;padding:0;display:flex;flex-direction:column;gap:8px}
 .advice li{border:1px solid var(--rule);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .advice li.urgent{border-left:4px solid var(--magenta)}
@@ -6207,7 +6210,7 @@ function routePreview(stops, t) {
    ===================================================================== */
 function queueModal(fn) { ui.queue.push(fn); if (!ui.modalOpen) nextModal(); }
 function nextModal() { const fn = ui.queue.shift(); if (!fn) { closeModal(); return; } showModal(typeof fn === 'function' ? fn() : fn); }
-function showModal(html, cls) { $('#modalBody').className = 'sheet' + (cls ? ' ' + cls : ''); $('#modalBody').innerHTML = html; $('#modal').hidden = false; ui.modalOpen = true; $('#modalBody').scrollTop = 0; const b = $('#modalBody .btn.primary'); if (b) b.focus({ preventScroll: true }); }
+function showModal(html, cls) { $('#modalBody').className = 'sheet' + (cls ? ' ' + cls : ''); $('#modalBody').innerHTML = html; $('#modal').hidden = false; ui.modalOpen = true; $('#modalBody').scrollTop = 0; const b = $('#modalBody .btn.primary'); if (b) b.focus({ preventScroll: true }); if (html.includes('id="acctBox"')) acctFill(); }
 function closeModal() { if (TENDER && !TENDER.done) { tenderPass(TENDER); TENDER = null; ui.panelDirty = true; } else if (TENDER && TENDER.done) TENDER = null; $('#modal').hidden = true; ui.modalOpen = false; if (playLog.unsub) { playLog.unsub(); playLog.unsub = null; } if (ui.queue.length) nextModal(); }
 /* ---------- First-play tour: the screen dims, a ring picks out one thing at a time, and a card explains it ---------- */
 const TOUR_KEY = 'tugboat-tour-v1';
@@ -6572,7 +6575,8 @@ function titleHTML(saved) {
   <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button><button class="btn wide" data-act="titleNew">New game</button>` : '<button class="btn primary wide" data-act="play">Open the 1870 season</button>'}</div>
   ${savedCount() > 1 || (BOARD.on && BOARD.known) || (!saved && savedCount()) ? `<div class="row"><button class="btn wide ghost" data-act="savedGames" data-from="title">Saved games${savedCount() ? ` (${savedCount()})` : ''}</button></div>` : ''}
   ${playNotice()}${homeHint()}
-  ${BOARD.on ? '<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button></div>' : ''}`;
+  ${BOARD.on ? `<div class="row"><button class="btn wide ghost" data-act="board">Scoreboard</button>${canPasskey() ? '<button class="btn wide ghost" data-act="titleSignIn">Sign in</button>' : ''}</div>` : ''}
+  ${BOARD.on && onOldHost ? moveHTML() : ''}`;
 }
 // On the standalone copy in an iPad's browser: how to put it on the home screen, where it opens full screen like an app
 const asApp = () => navigator.standalone === true || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches;
@@ -6723,15 +6727,131 @@ if (!BOARD.id) BOARD.id = Array.from(crypto.getRandomValues(new Uint8Array(16)),
 if (!BOARD.key) BOARD.key = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => (b % 36).toString(36)).join('');
 if (!BOARD.name) BOARD.name = boardRandomName();
 boardSave();
+/* ---------- Your player: signing in with a passkey, a recovery code, and moving to the new address ----------
+   Play needs no account: each device is a player of its own. A player who wants their games on all their devices, and
+   safe if one is lost, makes a passkey (Face ID, Touch ID or the device's lock; no password, no email) and writes down a
+   recovery code. On another device, the passkey or the code makes that device the same player, with a key of its own,
+   and their games come back from the online saves. A passkey belongs to the address it was made at, so none are made on
+   the old tugboat-tycoon.pages.dev: there, players move their games to tugboattycoon.com instead. */
+const OLD_HOST = 'tugboat-tycoon.pages.dev', NEW_HOME = window.__newHome || 'https://tugboattycoon.com', onOldHost = location.hostname === OLD_HOST; // (__newHome: for tests)
+const canPasskey = () => BOARD.on && !onOldHost && window.isSecureContext && !!window.PublicKeyCredential && !!navigator.credentials;
+const ACCT = { status: null };
+const newDeviceKey = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), b => (b % 36).toString(36)).join('');
+const toB64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const fromB64u = s => { const t = s.replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(t + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0)); };
+async function apiPost(path, body) { try { const r = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); const d = await r.json().catch(() => null); return d || { ok: false, error: `HTTP ${r.status}` }; } catch (e) { return { ok: false, error: 'offline' }; } }
+async function acctStatus() { ACCT.status = await apiPost('api/auth', { action: 'status', id: BOARD.id, key: BOARD.key }); return ACCT.status; }
+// This device becomes the player who signed in, with a key of its own
+function becomePlayer(p, key) { Object.assign(BOARD, { id: p.id, key, name: p.name || BOARD.name, named: !!p.named, hidePlace: !!p.hidePlace, known: true }); boardSave(); CLOUD.sig = ''; }
+async function passkeyCreate() {
+  const b = await apiPost('api/auth', { action: 'register-begin', id: BOARD.id, key: BOARD.key }); if (!b.ok) throw new Error(b.error);
+  const pk = b.publicKey;
+  const cred = await navigator.credentials.create({ publicKey: { ...pk, challenge: fromB64u(pk.challenge), user: { ...pk.user, id: fromB64u(pk.user.id) }, excludeCredentials: pk.excludeCredentials.map(c => ({ ...c, id: fromB64u(c.id) })) } });
+  const r = await apiPost('api/auth', { action: 'register-finish', id: BOARD.id, key: BOARD.key, challengeId: b.challengeId, device: deviceName(),
+    credential: { id: cred.id, type: cred.type, response: { clientDataJSON: toB64u(cred.response.clientDataJSON), attestationObject: toB64u(cred.response.attestationObject) } } });
+  if (!r.ok) throw new Error(r.error); return r;
+}
+async function passkeySignIn() {
+  const b = await apiPost('api/auth', { action: 'login-begin' }); if (!b.ok) throw new Error(b.error === 'too many' ? 'Too many tries. Wait a while and try again.' : b.error);
+  const pk = b.publicKey;
+  const cred = await navigator.credentials.get({ publicKey: { ...pk, challenge: fromB64u(pk.challenge) } });
+  const key = newDeviceKey(), resp = cred.response;
+  const r = await apiPost('api/auth', { action: 'login-finish', challengeId: b.challengeId, key, device: deviceName(), credential: { id: cred.id, type: cred.type,
+    response: { clientDataJSON: toB64u(resp.clientDataJSON), authenticatorData: toB64u(resp.authenticatorData), signature: toB64u(resp.signature), userHandle: resp.userHandle ? toB64u(resp.userHandle) : null } } });
+  if (!r.ok) throw new Error(r.error === 'unknown passkey' ? "That passkey isn't for a Tugboat Tycoon player we know." : r.error);
+  becomePlayer(r.player, key); return r.player;
+}
+// The cancel of a passkey sheet is no error worth showing
+const passkeyErr = e => /NotAllowed|AbortError|cancel/i.test(String(e && (e.name || e.message))) ? null : String(e && e.message || e);
+function acctHTML() {
+  if (!BOARD.on) return '';
+  return `<h3>Your player</h3>
+  <p class="desc">On the scoreboard you are <b>${esc(BOARD.name)}</b>. <button class="linkbtn" data-act="board">Change your name</button></p>
+  <div id="acctBox">${onOldHost ? moveHTML() : canPasskey() ? '<p class="fine">Checking…</p>' : '<p class="fine">Signing in needs a newer browser. Your games are kept on this device and saved online from it.</p>'}</div>`;
+}
+async function acctFill() {
+  const box = $('#acctBox'); if (!box || onOldHost || !canPasskey()) return;
+  const st = await acctStatus(), el = $('#acctBox'); if (!el) return;
+  const signIn = `<div class="row"><button class="btn wide" data-act="acctSignIn">Sign in with a passkey</button><button class="btn wide ghost" data-act="acctCode">Use a recovery code</button></div>`;
+  el.innerHTML = st && st.known && st.passkeys
+    ? `<p class="fine">Your games are kept safe with a passkey. To play them on another device, open the game there and choose <b>Sign in with a passkey</b> (or use your recovery code).</p>
+      <div class="row"><button class="btn wide ghost" data-act="acctNewCode">New recovery code</button><button class="btn wide ghost" data-act="acctSignOut">Sign out of this device</button></div>
+      ${st.admin ? '<div class="row"><a class="btn wide ghost" href="admin.html">Players (admin)</a></div>' : ''}`
+    : `<p class="fine">Keep your games safe, and play them on your other devices, with a <b>passkey</b>: Face ID, Touch ID or your device's lock. No password, no email.</p>
+      <div class="row"><button class="btn primary wide" data-act="acctCreate">Set up a passkey</button></div>
+      <p class="fine">Already playing on another device?</p>${signIn}`;
+}
+function codeHTML(code) {
+  return `<h2>Your recovery code</h2>
+  <p class="code" id="recCode">${esc(code)}</p>
+  <p class="desc">Write this down and keep it somewhere safe. If you ever lose every device with your passkey, this code brings your games back. It is shown only this once.</p>
+  <div class="row"><button class="btn wide" data-act="acctCopy">Copy it</button><button class="btn primary wide" data-act="menu">I've written it down</button></div>`;
+}
+function signInHTML(from) {
+  return `<h2>Sign in</h2>
+  <p class="desc">Sign in to play the games you saved on another device. ${from === 'title' ? '' : `This device's own games stay in Saved games.`}</p>
+  ${canPasskey() ? '<div class="row"><button class="btn primary wide" data-act="acctSignIn">Sign in with a passkey</button></div>' : ''}
+  <h3>Or with your recovery code</h3>
+  <div class="namefield"><input id="recInput" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ANCHOR-BIRCH-COVE-GULL-1234" aria-label="Recovery code"><button class="btn" data-act="acctRecover">Sign in</button></div>
+  <p class="status" id="acctMsg" aria-live="polite" hidden></p>
+  <div class="row"><button class="btn wide ghost" data-act="${from === 'title' ? 'titleBack' : 'menu'}">Back</button></div>`;
+}
+const acctMsg = (t, bad) => { const m = $('#acctMsg'); if (m) { m.textContent = t; m.hidden = !t; m.classList.toggle('bad', !!bad); } else if (t) toast(t, bad); };
+// Signed in: the player's online games, ready to load
+function signedIn(p) { toast(`Signed in as ${p.name}.`); boardReport(); showModal(savedGamesHTML('menu')); fillCloudList(); }
+
+// ---- the move from the old address ----
+const moveHTML = () => `<p class="fine"><b>Tugboat Tycoon has moved to tugboattycoon.com.</b> Move your games and your place on the scoreboard there, then play from the new address.</p>
+  <div class="row"><button class="btn primary wide" data-act="moveGames">Move my games</button></div>`;
+async function moveGames() {
+  if (inPlay) saveGame(true);
+  toast('Moving your games…');
+  // every game kept on this device goes up as an online save, the most recent last
+  const g = loadGames();
+  for (const id of Object.keys(g).sort((a, b) => g[a].at - g[b].at)) {
+    const e = g[id];
+    await fetch('api/save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: BOARD.id, key: BOARD.key, game: id, when: e.when, year: e.year, company: e.company, worth: e.worth, data: e.S }) }).catch(() => null);
+  }
+  const r = await apiPost('api/move', { id: BOARD.id, key: BOARD.key });
+  if (!r.ok) { toast(r.error === 'offline' ? 'Moving needs a connection.' : "The games couldn't be moved just now. Try again in a moment.", true); return; }
+  location.href = `${NEW_HOME}/#move=${encodeURIComponent(r.code)}`;
+}
+// Arriving at the new address with a move code: become the same player and bring the games down onto this browser
+async function arriveFromMove() {
+  const m = location.hash.match(/^#move=([A-Za-z0-9_-]+)/); if (!m) return false;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* fine */ }
+  const key = newDeviceKey(), r = await apiPost('api/move', { action: 'claim', code: m[1], key, device: deviceName() });
+  if (!r.ok) { showModal(`<h2>That link has run out</h2><p class="desc">Open the game at its old address and tap <b>Move my games</b> again.</p><div class="row"><button class="btn primary wide" data-act="titleBack">Carry on</button></div>`); return true; }
+  becomePlayer(r.player, key);
+  const data = await cloudGames(BOARD.id), games = (data && data.games) || [];
+  try {
+    const g = loadGames(); let newest = null;
+    for (const x of games) { g[x.game] = { at: x.at, when: x.when, year: x.year, company: x.company, worth: x.worth, S: x.data }; if (!newest || x.at > newest.at) newest = x; }
+    for (const id of Object.keys(g).sort((a, b) => g[b].at - g[a].at).slice(GAMES_MAX)) delete g[id];
+    localStorage.setItem(GAMES_KEY, JSON.stringify(g));
+    if (newest) localStorage.setItem(SAVE_KEY, newest.data);
+  } catch (e) { /* no room: they are still online */ }
+  const saved = loadSaved();
+  showModal(`<div class="rules"><span>tugboattycoon.com</span><span>Welcome aboard</span></div>
+  <h2>Your games are here, ${esc(BOARD.name)}</h2>
+  <p class="desc">${games.length ? `${games.length} game${games.length === 1 ? '' : 's'} came across, and your place on the scoreboard.` : 'Your place on the scoreboard came across.'}</p>
+  ${asApp() || !/iPad|iPhone|Macintosh/.test(navigator.userAgent) ? '' : '<p class="fine">To open the game from your home screen, add this page again: tap <b>Share</b>, then <b>Add to Home Screen</b>. You can delete the old one.</p>'}
+  ${canPasskey() ? '<p class="fine">To keep your games safe and play them on your other devices, set up a passkey in Settings.</p>' : ''}
+  <div class="row">${saved ? `<button class="btn primary wide" data-act="continue">Continue your ${saved.year} game</button>` : '<button class="btn primary wide" data-act="titleBack">Carry on</button>'}</div>`);
+  return true;
+}
 const deviceName = () => { const u = navigator.userAgent; return /iPad/.test(u) || (/Macintosh/.test(u) && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows PC' : 'computer'; };
 function boardReport(start, leaving) {
   if (!BOARD.on || !S || navigator.onLine === false) return;
   const t = performance.now(), minutes = BOARD.mark ? Math.min(15, (t - BOARD.mark) / 60000) : 0; BOARD.mark = leaving ? 0 : t;
-  const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, month: S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter', worth: Math.round(nw), title: titleFor(nw),
+  const nw = netWorth(), body = JSON.stringify({ id: BOARD.id, key: BOARD.key, name: BOARD.name, game: S.gameId, company: S.company, year: S.year, month: S.season ? MONTHS[dateOf(S.day).getUTCMonth()] : 'Winter', worth: Math.round(nw), title: titleFor(nw),
     hidePlace: !!BOARD.hidePlace, boats: S.tugs.filter(x => x.owner === 'p').length, fleet: S.tugs.filter(x => x.owner === 'p').reduce((a, t) => (a[t.model] = (a[t.model] || 0) + 1, a), {}), device: deviceName(), app: asApp(), minutes: Math.round(minutes * 10) / 10, start: !!start });
   try {
     if (leaving && navigator.sendBeacon) navigator.sendBeacon('api/board', new Blob([body], { type: 'application/json' }));
-    else fetch('api/board', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
+    else fetch('api/board', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).then(r => r.ok ? r.json() : null).then(d => {
+      // the board's name for this player is the one that counts (the owner may have changed it)
+      const p = d && d.player; if (p && p.id === BOARD.id && p.name && p.name !== BOARD.name) { BOARD.name = p.name; BOARD.named = !!p.named; boardSave(); }
+    }).catch(() => {});
   } catch (e) { /* offline, or no scoreboard */ }
 }
 // a new or loaded game reports at once, so the board never shows the last one
@@ -6755,7 +6875,7 @@ function boardNameHTML(where) {
 }
 async function openBoard() {
   showModal(`<h2>Scoreboard</h2><p class="fine">Fetching the scoreboard…</p>`);
-  let data = null; try { const r = await fetch('api/board', { cache: 'no-store' }); data = r.ok ? await r.json() : r.status === 503 ? { off: true } : null; } catch (e) { /* offline */ }
+  let data = null; try { const r = await fetch('api/board?id=' + encodeURIComponent(BOARD.id), { cache: 'no-store' }); data = r.ok ? await r.json() : r.status === 503 ? { off: true } : null; } catch (e) { /* offline */ }
   if (ui.modalOpen && $('#modalBody h2') && /scoreboard/i.test($('#modalBody h2').textContent)) showModal(boardHTML(data));
 }
 // A player's fleet on the board: each kind of boat's little side view, and how many
@@ -7012,12 +7132,13 @@ function menuHTML() {
   return `<div class="sheet-top"><h2>Settings</h2><button class="iconbtn xclose" data-act="closeModal" aria-label="Close settings"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg></button></div>
   <div class="row"><button class="btn wide" data-act="save">Save game</button><button class="btn wide" data-act="savedGames" data-from="menu">Saved games${savedCount() ? ` (${savedCount()})` : ''}</button></div>
   ${canFull() ? `<div class="row"><button class="btn wide" data-act="fullScreen">${isFull() ? 'Leave full screen' : 'Play full screen'}</button></div>` : ''}
+  ${acctHTML()}
   <h3>Share</h3>
   <div class="row"><button class="btn wide" data-act="share">${SHARE_ICON}Share how you're doing</button>${BOARD.on ? '<button class="btn wide" data-act="board">Scoreboard</button>' : ''}</div>
   <p class="fine">Send family and friends a picture of how your company is doing, or invite them to play.</p>
   <h3>Another device</h3>
   <div class="row"><button class="btn wide" data-act="sendGame">Send this game</button><button class="btn wide" data-act="loadGameFile">Load a game from a file</button></div>
-  <p class="fine">Your game is kept on this device only. To carry on somewhere else, send it (by Mail, Messages, AirDrop or anything that sends a file), then open the game there and load the file.</p>
+  <p class="fine">Signed in with a passkey, your games follow you to your other devices on their own. Or send one game as a file (by Mail, Messages, AirDrop or anything that sends a file), then open the game on the other device and load the file.</p>
   ${ui.confirmNew ? `<div class="confirm"><b>Start a new game in 1870? This one stays in Saved games, where you left it.</b><div class="row"><button class="btn danger wide" data-act="newGameYes">Start over</button><button class="btn wide" data-act="newGameNo">Keep playing</button></div></div>` : '<button class="btn" data-act="newGame">New game</button>'}
   ${playLog.owner && playLog.db ? '<div class="row"><button class="btn wide" data-act="players">Who\'s been playing</button></div>' : ''}
   ${textMenuHTML()}
@@ -7035,6 +7156,7 @@ function menuHTML() {
   <h3>History</h3>
   <div class="row"><button class="btn wide" data-act="history">The bay through the years, 1870 to today</button></div>
   <p class="fine">A timeline of real events on Georgian Bay and the world around it.</p>
+  ${BOARD.on ? '<p class="fine"><a href="privacy.html" target="_blank" rel="noopener">Privacy: what the game keeps</a></p>' : ''}
   <h3>About this map</h3>
   ${playNotice()}
   <p class="fine">Coastline, rivers and borders from Natural Earth (public domain); the forests, farms and rock are drawn to suit the country, not surveyed. The ports, railways, laws, boat types and dated events from 1870 to 1959 are real. The companies, captains, boats and schooners are invented, and some figures are simplified for play. Your saved game stays in this browser only.</p>
@@ -7097,8 +7219,39 @@ const ACTS = {
   board: () => openBoard(),
   boardNameAnother: () => { const i = $('#playerName'); if (i) i.value = boardRandomName(); },
   boardPlace: () => { BOARD.hidePlace = !BOARD.hidePlace; boardSave(); boardReport(); toast(BOARD.hidePlace ? 'Where you play from is now hidden.' : 'The board will show roughly where you play from.'); setTimeout(openBoard, 400); },
-  boardName: el => { const i = $('#playerName'); BOARD.name = (i ? i.value : '').trim().slice(0, 30) || boardRandomName(); BOARD.named = true; boardSave(); toast(BOARD.name ? `Saved. You're ${BOARD.name} on the scoreboard.` : 'Saved.'); if (BOARD.started) boardReport();
+  boardName: async el => {
+    const i = $('#playerName'), name = (i ? i.value : '').trim().slice(0, 30) || boardRandomName();
+    // the board takes only a decent name: the server says
+    const r = await apiPost('api/board', { id: BOARD.id, key: BOARD.key, action: 'name', name });
+    if (r && r.error === 'name') { toast("That name can't go on the scoreboard. Try another.", true); return; }
+    BOARD.name = name; BOARD.named = true; boardSave(); toast(`Saved. You're ${BOARD.name} on the scoreboard.`);
     if (el.dataset.where === 'title') showModal(titleHTML(loadSaved())); else openBoard(); },
+  acctCreate: async () => {
+    try { const r = await passkeyCreate(); toast('Passkey set up.'); if (r.recovery) showModal(codeHTML(r.recovery)); else acctFill(); }
+    catch (e) { const m = passkeyErr(e); if (m) toast(`The passkey wasn't set up: ${m}`, true); }
+  },
+  acctSignIn: async () => {
+    try { const p = await passkeySignIn(); signedIn(p); }
+    catch (e) { const m = passkeyErr(e); if (m) acctMsg(m, true); }
+  },
+  acctCode: () => showModal(signInHTML('menu')),
+  titleSignIn: () => showModal(signInHTML('title')),
+  acctRecover: async () => {
+    const code = ($('#recInput') || {}).value || '', key = newDeviceKey();
+    if (code.replace(/[^A-Za-z0-9]/g, '').length < 12) { acctMsg('Type the whole code, words and number.', true); return; }
+    const r = await apiPost('api/auth', { action: 'recover', code, key, device: deviceName() });
+    if (!r.ok) { acctMsg(r.error === 'too many' ? 'Too many tries. Wait an hour and try again.' : r.error === 'offline' ? 'Signing in needs a connection.' : "That code isn't right. Check the words and the number.", true); return; }
+    becomePlayer(r.player, key); signedIn(r.player);
+  },
+  acctNewCode: async () => { const r = await apiPost('api/auth', { action: 'new-code', id: BOARD.id, key: BOARD.key }); if (r.ok) showModal(codeHTML(r.recovery)); else toast("A new code couldn't be made just now.", true); },
+  acctCopy: () => { const t = ($('#recCode') || {}).textContent || ''; try { navigator.clipboard.writeText(t).then(() => toast('Copied.'), () => {}); } catch (e) { /* no clipboard */ } },
+  acctSignOut: async () => {
+    if (!confirm(`This device will forget ${BOARD.name}. Your games stay saved online, and come back when you sign in again. The games kept on this device stay here too.`)) return;
+    await apiPost('api/auth', { action: 'signout', id: BOARD.id, key: BOARD.key });
+    Object.assign(BOARD, { id: Array.from(crypto.getRandomValues(new Uint8Array(16)), b => (b % 36).toString(36)).join(''), key: newDeviceKey(), name: boardRandomName(), named: false, known: false });
+    boardSave(); toast('Signed out of this device.'); showModal(menuHTML());
+  },
+  moveGames: () => moveGames(),
   pvFit: () => pvFit(),
   pvZoom: el => { const r = pvRect(); pvZoomAt(+el.dataset.v > 0 ? 1.6 : 1 / 1.6, r.width / 2, r.height / 2); },
   pick: el => { if (performance.now() - +$('#picker').dataset.at < 350) return; hidePicker(); select({ t: el.dataset.t, id: el.dataset.id }); },
@@ -8344,7 +8497,7 @@ function start(data) {
   readColors(); buildNav(); initNodes(); buildMapPaths(); buildIslets(); gfxInit(); loadRelief(); loadDepth();
   resize(); renderBase();
   if (data && data.S && data.S.v === 1) { S = data.S; afterLoad(); inPlay = true; }
-  else { newGame(); afterLoad(); showModal(titleHTML(loadSaved())); }
+  else { newGame(); afterLoad(); showModal(titleHTML(loadSaved())); if (BOARD.on) arriveFromMove(); }
   syncSpeed(); syncSoundBtn();
   window.addEventListener('resize', () => { resize(); });
   if (window.ResizeObserver) new ResizeObserver(() => resize()).observe($('#mapArea'));

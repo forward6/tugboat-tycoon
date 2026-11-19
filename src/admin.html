@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Players · Tugboat Tycoon</title>
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+  :root { --ink: #1c2731; --ink2: #56616b; --paper: #fbf7ec; --rule: #c2b183; --accent: #a3306a; --bad: #ab352d; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #dbe3e3; --ink2: #9aa6ab; --paper: #1a1f22; --rule: #3f453b; --accent: #d77aa8; --bad: #e07a70; } }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font: 400 30px Georgia, serif; margin: 0 0 4px; } .sub { color: var(--ink2); margin: 0 0 16px; }
+  .stats { display: flex; gap: 24px; flex-wrap: wrap; margin: 12px 0 18px; } .stats b { display: block; font-size: 24px; }
+  input[type=search] { width: 100%; max-width: 360px; font: inherit; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: inherit; }
+  .wrap { overflow-x: auto; } table { border-collapse: collapse; width: 100%; min-width: 760px; margin-top: 12px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; } th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink2); }
+  td small { color: var(--ink2); display: block; } tr.hid td { opacity: .5; }
+  button { font: inherit; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; margin: 0 4px 4px 0; }
+  button.bad { border-color: var(--bad); color: var(--bad); } .msg { color: var(--bad); } a { color: var(--accent); }
+</style>
+<main>
+  <h1>Players</h1>
+  <p class="sub">Everyone who has played on the public site. <a href="./">Back to the game</a></p>
+  <div id="out"><p>Loading…</p></div>
+</main>
+<script>
+(() => {
+  const me = (() => { try { return JSON.parse(localStorage.getItem('tugboat-player') || 'null'); } catch (e) { return null; } })();
+  const out = document.getElementById('out'), esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const money = v => v == null ? '–' : '$' + Math.round(v).toLocaleString('en-CA');
+  const ago = t => { if (!t) return '–'; const m = (Date.now() - t) / 60000; return m < 60 ? `${Math.round(m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+  let players = [], filter = '';
+  async function load() {
+    if (!me || !me.id) { out.innerHTML = '<p class="msg">Open the game on this device first, signed in as you.</p>'; return; }
+    const r = await fetch(`api/admin?id=${encodeURIComponent(me.id)}&key=${encodeURIComponent(me.key || '')}`, { cache: 'no-store' });
+    if (!r.ok) { out.innerHTML = r.status === 403 ? `<p class="msg">This device isn't signed in as the game's owner. Your player number here is <b>${esc(me.id)}</b>: put it in the ADMIN_PLAYER setting of the Cloudflare project, then reload.</p>` : `<p class="msg">The player list couldn't be fetched (${r.status}).</p>`; return; }
+    const d = await r.json(); players = d.players; draw(d);
+  }
+  function draw(d) {
+    const rows = players.filter(p => !filter || (p.name + ' ' + (p.cur && p.cur.company || '')).toLowerCase().includes(filter));
+    out.innerHTML = `<div class="stats"><div><b>${players.length}</b>players</div><div><b>${d.today}</b>played today</div><div><b>${d.week}</b>this week</div><div><b>${players.filter(p => p.passkeys).length}</b>with a passkey</div></div>
+      <input type="search" placeholder="Find a name or company" value="${esc(filter)}" id="find">
+      <div class="wrap"><table><thead><tr><th>Player</th><th>Playing</th><th>Best</th><th>Last played</th><th>From</th><th></th></tr></thead><tbody>
+      ${rows.map(p => `<tr class="${p.hidden ? 'hid' : ''}"><td><b>${esc(p.name || '(no name)')}</b><small>${esc(p.id)}${p.passkeys ? ' · passkey' : ''} · ${p.devices} device${p.devices === 1 ? '' : 's'}${p.hidden ? ' · hidden' : ''}</small></td>
+        <td>${esc(p.cur && p.cur.company || '–')}<small>${esc([p.cur && p.cur.month, p.cur && p.cur.year].filter(Boolean).join(' '))} · ${money(p.cur && p.cur.worth)}</small></td>
+        <td>${money(p.best && p.best.worth)}</td><td>${ago(p.last)}<small>${Math.round(p.minutes || 0)} min, ${p.sessions || 0} sessions</small></td>
+        <td>${esc([p.place && p.place.region, p.place && p.place.country].filter(Boolean).join(', ') || '–')}<small>${esc(p.device || '')}</small></td>
+        <td><button data-a="rename" data-t="${esc(p.id)}">Settler's name</button><button data-a="${p.hidden ? 'show' : 'hide'}" data-t="${esc(p.id)}">${p.hidden ? 'Show' : 'Hide'}</button><button class="bad" data-a="remove" data-t="${esc(p.id)}">Delete</button></td></tr>`).join('')}
+      </tbody></table></div>`;
+    document.getElementById('find').oninput = e => { filter = e.target.value.toLowerCase(); draw(d); const f = document.getElementById('find'); f.focus(); f.setSelectionRange(f.value.length, f.value.length); };
+  }
+  out.addEventListener('click', async e => {
+    const b = e.target.closest('button[data-a]'); if (!b) return;
+    const p = players.find(x => x.id === b.dataset.t);
+    if (b.dataset.a === 'remove' && !confirm(`Delete ${p ? p.name : 'this player'} and all their saved games? This can't be undone.`)) return;
+    const r = await fetch('api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: me.id, key: me.key, action: b.dataset.a, target: b.dataset.t }) });
+    if (!r.ok) alert('That did not work (' + r.status + ').'); load();
+  });
+  load();
+})();
+</script>
+</html>
