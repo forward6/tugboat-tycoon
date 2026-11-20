@@ -1211,7 +1211,7 @@ function newLedger(year) { return { year, logs: 0, lumber: 0, coal: 0, supplies:
   running: 0, repairs: 0, refit: 0, premiums: 0, interest: 0, licences: 0, fines: 0, nets: 0, ice: 0, penalties: 0, capital: 0 }; }
 function newGame(seed) {
   S = { v: 1, seed: (seed || (Date.now() & 0x7fffffff)) | 0, day: dayOf(1870, 4, 20), year: 1870, season: true, seasonClose: dayOf(1870, 12, 6),
-    cash: 9000, loans: 0, company: 'Georgian Bay Towing & Fish Co.', ports: {}, grounds: {}, tugs: [], jobs: [], news: [], fired: {}, effects: [],
+    cash: 9000, loans: 0, company: companyName(), fresh: true, ports: {}, grounds: {}, tugs: [], jobs: [], news: [], fired: {}, effects: [],
     nextId: 1, ledger: newLedger(1870), history: [], comps: {}, premiumMult: 1, premiumUntil: 0, rank: 0, ranksV: 2, over: false, seen: {}, mkt: newMarket() };
   for (const p of PORTS) {
     const st = {}; for (const c of CARGO_IDS) { const r = supplyRate(p.id, c); if (r) st[c] = Math.round(r * 10 * 10) / 10; }
@@ -1244,6 +1244,61 @@ function newName(owner) {
   const used = new Set(S.tugs.map(t => t.name));
   const pool = (owner === 'r' ? RIVAL_NAMES : owner === 'f' ? FISH_RIVAL_NAMES : PLAYER_NAMES).filter(n => !used.has(n));
   return pool.length ? pick(pool) : (owner === 'r' ? 'Kate Murphy ' : owner === 'f' ? 'North Star ' : 'Mary Ellen Carter ') + (S.nextId);
+}
+// The player's company: a name of the day, picked at random for each new game, and never one already in use (by a rival,
+// by another game on this device, or by anyone's game the server knows of). The server sends only a short hash of each
+// name in use (api/names), the same hash as nameKey here.
+const CO_PLACES = ['Collingwood', 'Nottawasaga', 'Craigleith', 'Thornbury', 'Cape Rich', 'Christian Island', 'Blue Mountain', 'Pretty River',
+  'Batteau Creek', 'Silver Creek', 'Hurontario', 'Lake Huron', 'North Shore', 'Beaver Valley', 'Sunnidale', 'Hen and Chickens'];
+const CO_NAMES = ['Abbott', 'Ainslie', 'Baird', 'Bell', 'Birch', 'Black', 'Brennan', 'Brodie', 'Buchanan', 'Carmichael', 'Chisholm', 'Coates', 'Corbett',
+  'Currie', 'Dawson', 'Doyle', 'Dunlop', 'Elliott', 'Fenwick', 'Ferguson', 'Foley', 'Gilchrist', 'Graham', 'Hale', 'Hogan', 'Inglis', 'Irwin', 'Jardine',
+  'Kehoe', 'Kennedy', 'Kirk', 'Laidlaw', 'Leask', 'Lindsay', 'Logan', 'Lynch', 'Mackenzie', 'Marsh', 'McAlpine', 'McColl', 'McCrae', 'McGill', 'McInnes',
+  'McIntyre', 'McKinnon', 'McLeod', 'McNeil', 'Moffat', 'Muir', 'Nicol', 'Nolan', 'Ogilvie', 'Pike', 'Pringle', 'Quinn', 'Rankin', 'Robertson', 'Rowe',
+  'Scott', 'Sharpe', 'Sutherland', 'Telfer', 'Thorne', 'Tolmie', 'Urquhart', 'Wade', 'Weir', 'Wilkie', 'Young'];
+const CO_TRADES = ['Towing & Fish Co.', 'Towing & Fishing Co.', 'Tug & Fish Co.', 'Steam Tug Co.', 'Towing Company', 'Tug Line', 'Forwarding Co.', 'Transportation Co.'];
+const NAMES_KEY = 'tugboat-names-v1';
+function cyrb53(str) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) { const ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507); h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507); h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+}
+const nameKey = s => cyrb53(String(s || '').toLowerCase().replace(/[^a-z0-9&]+/g, ' ').trim()).toString(36);
+function takenNames(except) {
+  const t = new Set();
+  for (const c of RIVALS) { t.add(nameKey(c.name)); for (const [, n] of c.titles || []) t.add(nameKey(n)); }
+  for (const [id, g] of Object.entries(loadGames())) if (id !== except && g && g.company) t.add(nameKey(g.company));
+  try { for (const k of (JSON.parse(localStorage.getItem(NAMES_KEY) || 'null') || {}).taken || []) t.add(k); } catch (e) { /* none kept */ }
+  return t;
+}
+function companyName(taken = takenNames()) {
+  const r = a => a[Math.floor(Math.random() * a.length)];
+  const rivalWords = new Set(RIVALS.flatMap(c => [c.name, ...(c.titles || []).map(x => x[1])]).join(' ').split(/[^A-Za-z]+/));
+  const sur = CO_NAMES.filter(n => !rivalWords.has(n));
+  let name = '';
+  for (let i = 0; i < 400; i++) {
+    const a = r(sur), b = r(sur.filter(n => n !== a)), p = r(CO_PLACES), k = Math.random();
+    name = k < .24 ? `${p} ${r(CO_TRADES)}`
+      : k < .48 ? `${a} & ${b}${Math.random() < .5 ? ' Towing Co.' : ''}`
+      : k < .62 ? `${a} Bros.${r(['', ' Towing', ' Towing & Fishing'])}`
+      : k < .74 ? `${a} & Son${Math.random() < .5 ? 's' : ''}`
+      : k < .88 ? `The ${p} ${r(['Tug Company', 'Towing Company', 'Forwarding Company'])}`
+      : `${a}, ${b} & Co.`;
+    if (name.length <= 32 && !taken.has(nameKey(name))) return name;
+  }
+  return name;
+}
+// the names in use, from the server, kept for next time (and for offline); a new game that has not yet made a decision
+// takes another name if its own turns out to be in use
+async function refreshTakenNames() {
+  if (!BOARD.on || navigator.onLine === false) return;
+  try {
+    const r = await fetch('api/names?game=' + encodeURIComponent((S && S.gameId) || ''), { cache: 'no-store' }); if (!r.ok) return;
+    const d = await r.json(); if (!d || !Array.isArray(d.taken)) return;
+    localStorage.setItem(NAMES_KEY, JSON.stringify({ at: Date.now(), taken: d.taken.slice(0, 50000) }));
+    if (S && S.fresh && takenNames(S.gameId).has(nameKey(S.company))) { S.company = companyName(takenNames(S.gameId)); ui.panelDirty = true; }
+  } catch (e) { /* offline: the names kept from last time will do */ }
 }
 const FISH_RIVAL_NAMES = ['Island Queen', 'Silver Spray', 'North Star', 'Lillie May', 'Ada Belle', 'Marion', 'Bessie', 'Water Lily', 'Wanda', 'Cora', 'Fairy', 'Effie Mae', 'Rosalind', 'Twilight'];
 // The competition: real firms of the day, and Bay Towing & Wrecking, a rival made up for the game.
@@ -7555,13 +7610,13 @@ const ACTS = {
   },
   newGame: () => { ui.confirmNew = true; showModal(menuHTML()); },
   newGameNo: () => { ui.confirmNew = false; showModal(menuHTML()); },
-  newGameYes: () => { if (inPlay) saveGame(true); ui.queue = []; newGame(); afterLoad(); closeModal(); beginPlay(); boardNow(); if (!tourSeen()) startTour(); },
+  newGameYes: () => { if (inPlay) saveGame(true); ui.queue = []; newGame(); afterLoad(); closeModal(); beginPlay(); boardNow(); refreshTakenNames(); if (!tourSeen()) startTour(); },
   startSeason: () => { closeModal(); startSeason(); saveGame(true); },
   newsAll: () => { select(null); $('#panel').classList.remove('collapsed'); },
 };
 function onAct(e) {
   const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
-  const f = ACTS[el.dataset.act]; if (f) { e.preventDefault(); f(el); if (DECIDE.has(el.dataset.act) && inPlay) markReal(); }
+  const f = ACTS[el.dataset.act]; if (f) { e.preventDefault(); f(el); if (DECIDE.has(el.dataset.act) && inPlay) { markReal(); if (S && S.fresh) delete S.fresh; } }
 }
 document.addEventListener('click', onAct);
 $('#ticker').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ACTS.newsAll(); } });
@@ -8741,7 +8796,7 @@ function start(data) {
   readColors(); buildNav(); initNodes(); buildMapPaths(); buildIslets(); gfxInit(); loadRelief(); loadDepth();
   resize(); renderBase();
   if (data && data.S && data.S.v === 1) { S = data.S; afterLoad(); inPlay = true; }
-  else { newGame(); afterLoad(); showModal(titleHTML(loadSaved())); if (BOARD.on) arriveFromMove().then(moved => { if (!moved) syncDrops(); }); }
+  else { newGame(); afterLoad(); showModal(titleHTML(loadSaved())); refreshTakenNames(); if (BOARD.on) arriveFromMove().then(moved => { if (!moved) syncDrops(); }); }
   syncSpeed(); syncSoundBtn();
   window.addEventListener('resize', () => { resize(); });
   if (window.ResizeObserver) new ResizeObserver(() => resize()).observe($('#mapArea'));
